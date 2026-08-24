@@ -48,5 +48,6 @@ CREATE TABLE `reports` (
 CREATE INDEX `idx_reports_reported_user_status` ON `reports` (`reported_user_id`,`status`);--> statement-breakpoint
 ALTER TABLE `conversation_members` ADD `role` text DEFAULT 'member' NOT NULL;--> statement-breakpoint
 ALTER TABLE `users` ADD `display_name` text;--> statement-breakpoint
-ALTER TABLE `users` ADD `updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL;--> statement-breakpoint
+ALTER TABLE `users` ADD `updated_at` text DEFAULT '1970-01-01T00:00:00.000Z' NOT NULL;--> statement-breakpoint
+UPDATE `users` SET `updated_at` = CURRENT_TIMESTAMP;--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_users_email` ON `users` (`email`);
