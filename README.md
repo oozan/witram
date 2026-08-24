@@ -25,6 +25,9 @@ The 0.3 release turns the private-chat MVP into a more complete daily-use experi
 - Encrypted message replies with restored quote context
 - Clickable reply quotes that jump to their encrypted target message
 - Safe clickable HTTP and HTTPS links without raw message HTML rendering
+- Client-enforced message limits with a near-limit character counter
+- Immediate offline/online detection with a manual secure-sync retry
+- Recoverable application error screen and honest unavailable-feature states
 - Encrypted message editing and synchronized deletion markers
 - Copyable message text with clear clipboard feedback
 - Device-local pinned messages with a jump-to-message banner

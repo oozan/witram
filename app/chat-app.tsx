@@ -157,6 +157,8 @@ const initialChats: Chat[] = [
 const formatTime = () =>
   new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
 
+const MAX_MESSAGE_LENGTH = 12_000;
+
 const emojiGroups = [
   { name: "Smileys", icon: "☺", emojis: ["😀", "😃", "😄", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "🤗", "🤔", "🫡", "🥹", "😴", "😭", "😤", "🤯", "😱", "🙈", "🫠"] },
   { name: "Gestures", icon: "✌", emojis: ["👋", "🤚", "🖐️", "✋", "👌", "🤌", "🤏", "✌️", "🤞", "🫶", "🤟", "🤙", "👈", "👉", "👆", "👇", "👍", "👎", "👏", "🙌", "🤝", "🙏", "💪", "🫵"] },
@@ -274,6 +276,7 @@ export function ChatApp() {
   const [newChatName, setNewChatName] = useState("");
   const [creatingChat, setCreatingChat] = useState(false);
   const [syncState, setSyncState] = useState<"online" | "syncing" | "offline">("syncing");
+  const [syncRevision, setSyncRevision] = useState(0);
   const [showChatSearch, setShowChatSearch] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [highlightedMessageId, setHighlightedMessageId] = useState<Message["id"] | null>(null);
@@ -354,6 +357,20 @@ export function ChatApp() {
       setChats((current) => current.map(withChatPreferences));
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setSyncState("syncing");
+      setSyncRevision((current) => current + 1);
+    };
+    const handleOffline = () => setSyncState("offline");
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -504,7 +521,7 @@ export function ChatApp() {
     void loadEncryptedMessages();
     const interval = window.setInterval(loadEncryptedMessages, 5000);
     return () => { cancelled = true; window.clearInterval(interval); };
-  }, [activeId]);
+  }, [activeId, syncRevision]);
 
   useEffect(() => {
     const element = messageSpaceRef.current;
@@ -647,6 +664,10 @@ export function ChatApp() {
     event.preventDefault();
     const text = draft.trim();
     if (!text) return;
+    if (text.length > MAX_MESSAGE_LENGTH) {
+      flash(`Messages can contain up to ${MAX_MESSAGE_LENGTH.toLocaleString()} characters`);
+      return;
+    }
 
     if (editingMessage && typeof editingMessage.id === "string") {
       const editing = editingMessage;
@@ -848,6 +869,15 @@ export function ChatApp() {
     window.setTimeout(() => setNotice(null), 2200);
   }
 
+  function retrySecureSync() {
+    if (!navigator.onLine) {
+      flash("This device is still offline");
+      return;
+    }
+    setSyncState("syncing");
+    setSyncRevision((current) => current + 1);
+  }
+
   function toggleTheme() {
     setTheme((current) => {
       const next = current === "light" ? "dark" : "light";
@@ -894,7 +924,7 @@ export function ChatApp() {
           <button className="avatar avatar-me" aria-label="Open profile" onClick={() => flash("Profile settings are ready for the next step")}>OZ</button>
           <div className="brand-lockup">
             <strong>Whisper</strong>
-            <span role="status" aria-live="polite"><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · messages queued"}</span>
+            <button className="sync-status-button" aria-live="polite" onClick={retrySecureSync} disabled={syncState === "syncing"} title={syncState === "offline" ? "Retry secure sync" : undefined}><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · retry sync"}</button>
           </div>
           <button className="icon-button theme-toggle" aria-pressed={theme === "dark"} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} onClick={toggleTheme}>{theme === "light" ? "☾" : "☀"}</button>
           <button className="icon-button new-chat" aria-label="Start new chat" onClick={() => setShowNewChat(true)}>＋</button>
@@ -953,7 +983,7 @@ export function ChatApp() {
           </button>
           <div className="chat-actions">
             <button className={`icon-button ${showChatSearch ? "active" : ""}`} aria-label="Search chat" onClick={() => showChatSearch ? setShowChatSearch(false) : openChatSearch()}>⌕</button>
-            <button className="icon-button" aria-label="Start secure call" onClick={() => flash(`Calling ${activeChat.name} securely…`)}>♢</button>
+            <button className="icon-button" aria-label="Encrypted calls are not available yet" title="Encrypted calls are not available yet" disabled>♢</button>
             <button className="icon-button" aria-label="More options" onClick={() => setShowInfo((value) => !value)}>•••</button>
           </div>
         </header>
@@ -1099,14 +1129,14 @@ export function ChatApp() {
             </div>
           )}
           <form className="composer" onSubmit={sendMessage}>
-            <button type="button" className="composer-button" aria-label="Attach file" onClick={() => flash("Choose a photo, file, or location")}>⌇</button>
-            <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message…" aria-label="Message" />
+            <button type="button" className="composer-button" aria-label="Encrypted attachments are not available yet" title="Encrypted attachments are not available yet" disabled>⌇</button>
+            <input maxLength={MAX_MESSAGE_LENGTH} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message…" aria-label="Message" />
             <button type="button" className={`composer-button ${showMediaPicker ? "active" : ""}`} aria-label="Add emoji or GIF" onClick={() => setShowMediaPicker((value) => !value)}>☺</button>
-            <button type={draft.trim() ? "submit" : "button"} className={`send-button ${draft.trim() ? "ready" : ""}`} aria-label={draft.trim() ? "Send message" : "Record voice message"} onClick={() => !draft.trim() && flash("Hold to record a voice message")}>
+            <button type={draft.trim() ? "submit" : "button"} className={`send-button ${draft.trim() ? "ready" : ""}`} aria-label={draft.trim() ? "Send message" : "Encrypted voice messages are not available yet"} onClick={() => !draft.trim() && flash("Encrypted voice messages are not available yet")}>
               {draft.trim() ? "➤" : "♩"}
             </button>
           </form>
-          <p className="composer-hint">{draft ? "Draft saved on this device · " : "Enter to send · "}<span>encrypted on this device</span></p>
+          <p className="composer-hint">{draft.length >= MAX_MESSAGE_LENGTH * .8 ? `${draft.length.toLocaleString()} / ${MAX_MESSAGE_LENGTH.toLocaleString()} · ` : draft ? "Draft saved on this device · " : "Enter to send · "}<span>encrypted on this device</span></p>
         </div>
       </section>
 
@@ -1119,12 +1149,12 @@ export function ChatApp() {
           <div className="quick-actions">
             <button aria-pressed={Boolean(activeChat.muted)} onClick={() => updateChatPreference("muted")}><span>{activeChat.muted ? "♪" : "♩"}</span>{activeChat.muted ? "Unmute" : "Mute"}</button>
             <button aria-pressed={Boolean(activeChat.pinned)} onClick={() => updateChatPreference("pinned")}><span>◆</span>{activeChat.pinned ? "Unpin" : "Pin"}</button>
-            <button onClick={() => flash("Secure call started")}><span>♢</span>Call</button>
+            <button disabled title="Encrypted calls are not available yet"><span>♢</span>Call</button>
             <button onClick={openChatSearch}><span>⌕</span>Search</button>
           </div>
           <div className="info-card">
             <div><span>Encryption</span><strong>Verified</strong></div>
-            <p>Messages and calls are secured with keys stored on your devices.</p>
+            <p>Messages are secured with keys stored on this device.</p>
             <button onClick={() => flash("Safety number copied")}>View safety number</button>
           </div>
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>

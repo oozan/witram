@@ -150,6 +150,21 @@ test("renders only safe web links without injecting message HTML", async () => {
   assert.doesNotMatch(client, /dangerouslySetInnerHTML/);
 });
 
+test("hardens message limits, connectivity recovery, and unsupported controls", async () => {
+  const [client, errorBoundary] = await Promise.all([
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/error.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(client, /MAX_MESSAGE_LENGTH = 12_000/);
+  assert.match(client, /maxLength=\{MAX_MESSAGE_LENGTH\}/);
+  assert.match(client, /addEventListener\("online"/);
+  assert.match(client, /retrySecureSync/);
+  assert.match(client, /Encrypted attachments are not available yet/);
+  assert.match(client, /Encrypted calls are not available yet/);
+  assert.match(errorBoundary, /reset\(\)/);
+});
+
 test("adds baseline browser security headers", async () => {
   const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
   assert.match(worker, /x-content-type-options/);
