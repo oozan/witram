@@ -141,6 +141,15 @@ test("pins messages locally without storing decrypted message content", async ()
   assert.match(client, /Unpin message/);
 });
 
+test("renders only safe web links without injecting message HTML", async () => {
+  const client = await readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8");
+
+  assert.match(client, /https\?:\\\/\\\/\[\^\\s\]\+/);
+  assert.match(client, /rel="noopener noreferrer"/);
+  assert.match(client, /referrerPolicy="no-referrer"/);
+  assert.doesNotMatch(client, /dangerouslySetInnerHTML/);
+});
+
 test("adds baseline browser security headers", async () => {
   const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
   assert.match(worker, /x-content-type-options/);

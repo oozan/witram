@@ -247,6 +247,13 @@ function decodeStoredMessage(value: string): DecodedStoredContent {
     : { recordType: "message", text: value };
 }
 
+function MessageText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/gi);
+  return <p>{parts.map((part, index) => /^https?:\/\//i.test(part)
+    ? <a key={`${part}-${index}`} href={part} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{part}</a>
+    : part)}</p>;
+}
+
 export function ChatApp() {
   const [chats, setChats] = useState(initialChats);
   const [activeId, setActiveId] = useState("maya");
@@ -1012,7 +1019,7 @@ export function ChatApp() {
                   ) : message.gif ? (() => {
                     const gif = gifs.find((item) => item.id === message.gif) ?? gifs[0];
                     return <div className={`gif-message gif-${gif.id}`} style={{ "--gif-a": gif.colors[0], "--gif-b": gif.colors[1] } as CSSProperties}><span>{gif.emoji}</span><strong>{gif.label}</strong><i>GIF</i></div>;
-                  })() : <p>{message.text}</p>}
+                  })() : <MessageText text={message.text} />}
                   </>}
                   <span className="message-meta">
                     {message.edited && !message.deleted && <i>edited</i>}

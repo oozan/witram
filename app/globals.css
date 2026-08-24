@@ -222,6 +222,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(14,124,102,.
 .bubble:hover .add-reaction, .bubble:hover .reply-message { opacity: 1; transform: translateY(-50%) scale(1); }
 .mine .bubble { border-radius: 15px 15px 4px 15px; background: #d8f0e6; }
 .bubble p { margin: 0; color: #26332f; font-size: 13px; line-height: 1.47; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble p a { color: var(--green); font-weight: 700; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.bubble p a:hover { color: var(--green-deep); }
 .bubble p.deleted-message { color: #89938f; font-style: italic; }
 .message-meta { display: flex; justify-content: flex-end; gap: 4px; margin-top: 3px; color: #89938f; font-size: 9px; }
 .message-meta i { font-style: normal; }
