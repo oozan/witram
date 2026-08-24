@@ -1,6 +1,4 @@
-import { env } from "cloudflare:workers";
-
-type D1Result<T> = { results?: T[] };
+import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
 
 type StoredMessage = {
   id: string;
@@ -11,75 +9,23 @@ type StoredMessage = {
   created_at: string;
 };
 
-function database() {
-  if (!env.DB) throw new Error("D1 binding DB is unavailable");
-  return env.DB;
-}
-
-async function initializeDatabase() {
-  const db = database();
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT,
-      public_key TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS conversations (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      kind TEXT NOT NULL DEFAULT 'direct',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS conversation_members (
-      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      wrapped_key TEXT,
-      joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (conversation_id, user_id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-      sender_id TEXT NOT NULL REFERENCES users(id),
-      ciphertext TEXT NOT NULL,
-      iv TEXT NOT NULL,
-      algorithm TEXT NOT NULL DEFAULT 'AES-GCM-256',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`),
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id)"),
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at)"),
-  ]);
-}
-
-function identity(request: Request) {
-  const userId = request.headers.get("oai-authenticated-user-id") ?? request.headers.get("x-whisper-device-id");
-  const email = request.headers.get("oai-authenticated-user-email");
-  return { userId, email };
-}
-
 function isValidEncryptedField(value: unknown, maximum: number) {
   return typeof value === "string" && value.length > 0 && value.length <= maximum && /^[A-Za-z0-9+/=]+$/.test(value);
 }
 
-function json(data: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers);
-  headers.set("cache-control", "no-store");
-  return Response.json(data, { ...init, headers });
-}
-
 export async function GET(request: Request) {
-  const { userId } = identity(request);
-  if (!userId) return json({ error: "Authentication is required" }, { status: 401 });
+  const current = identity(request);
+  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
 
   const conversationId = new URL(request.url).searchParams.get("conversationId")?.trim();
   if (!conversationId || !/^[a-z0-9-]{1,80}$/i.test(conversationId)) return json({ error: "A valid conversationId is required" }, { status: 400 });
 
   await initializeDatabase();
+  await registerIdentity(current);
   const db = database();
   const membership = await db.prepare(
     "SELECT 1 AS allowed FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1",
-  ).bind(conversationId, userId).first();
+  ).bind(conversationId, current.userId).first();
 
   if (!membership) return json({ messages: [] });
 
@@ -94,14 +40,14 @@ export async function GET(request: Request) {
       ciphertext: message.ciphertext,
       iv: message.iv,
       createdAt: message.created_at,
-      mine: message.sender_id === userId,
+      mine: message.sender_id === current.userId,
     })),
   });
 }
 
 export async function POST(request: Request) {
-  const { userId, email } = identity(request);
-  if (!userId) return json({ error: "Authentication is required" }, { status: 401 });
+  const current = identity(request);
+  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > 90_000) return json({ error: "Request body is too large" }, { status: 413 });
@@ -122,18 +68,26 @@ export async function POST(request: Request) {
   }
 
   await initializeDatabase();
+  await registerIdentity(current);
   const db = database();
   const membership = await db.prepare(
     "SELECT 1 AS allowed FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1",
-  ).bind(conversationId, userId).first();
+  ).bind(conversationId, current.userId).first();
   if (!membership) return json({ error: "You are not a member of this conversation" }, { status: 403 });
+
+  const blocked = await db.prepare(
+    `SELECT 1 FROM conversation_members cm JOIN blocks b
+       ON (b.blocker_id = ? AND b.blocked_id = cm.user_id)
+       OR (b.blocked_id = ? AND b.blocker_id = cm.user_id)
+     WHERE cm.conversation_id = ? AND cm.user_id != ? LIMIT 1`,
+  ).bind(current.userId, current.userId, conversationId, current.userId).first();
+  if (blocked) return json({ error: "Messages are disabled because a conversation member is blocked" }, { status: 403 });
 
   const id = crypto.randomUUID();
   await db.batch([
-    db.prepare("INSERT OR IGNORE INTO users (id, email) VALUES (?, ?)").bind(userId, email),
     db.prepare(
       "INSERT INTO messages (id, conversation_id, sender_id, ciphertext, iv) VALUES (?, ?, ?, ?, ?)",
-    ).bind(id, conversationId, userId, payload.ciphertext, payload.iv),
+    ).bind(id, conversationId, current.userId, payload.ciphertext, payload.iv),
   ]);
 
   return json({ message: { id, createdAt: new Date().toISOString() } }, { status: 201 });

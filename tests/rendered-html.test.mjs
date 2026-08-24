@@ -14,26 +14,27 @@ async function render() {
   );
 }
 
-test("server-renders the Whisper chat experience", async () => {
+test("server-renders the Whisper sign-in boundary for anonymous visitors", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
   assert.match(html, /<title>Whisper — Private conversations<\/title>/i);
-  assert.match(html, /Product Crew/);
-  assert.match(html, /Messages are end-to-end encrypted/);
-  assert.match(html, /Write a message/);
+  assert.match(html, /Welcome to Whisper/);
+  assert.match(html, /Sign in with ChatGPT/);
+  assert.match(html, /never asks for or stores your password/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 
 test("keeps plaintext out of the persistence boundary", async () => {
-  const [route, conversationsRoute, cryptoClient, schema, hosting] = await Promise.all([
+  const [route, conversationsRoute, cryptoClient, schema, hosting, social] = await Promise.all([
     readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/conversations/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/client-crypto.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/_lib/social.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(cryptoClient, /AES-GCM/);
@@ -44,7 +45,7 @@ test("keeps plaintext out of the persistence boundary", async () => {
   assert.match(route, /not a member of this conversation/);
   assert.doesNotMatch(route, /INSERT OR IGNORE INTO conversation_members/);
   assert.match(conversationsRoute, /WHERE cm\.user_id = \?/);
-  assert.match(conversationsRoute, /cache-control/);
+  assert.match(social, /cache-control/);
   assert.match(schema, /idx_messages_conversation_created_at/);
   assert.match(hosting, /"d1": "DB"/);
 });
@@ -70,6 +71,42 @@ test("keeps drafts device-local and provides in-chat search", async () => {
   assert.match(client, /chatSearchResults/);
   assert.match(client, /Search messages in/);
   assert.doesNotMatch(route, /draft/);
+});
+
+test("enforces authenticated accounts, contacts, membership, blocks, and reports", async () => {
+  const [page, social, contacts, blocks, reports, conversations, messages, schema, migration, client] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/_lib/social.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/contacts/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/blocks/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/reports/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/conversations/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0001_outgoing_the_professor.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /getChatGPTUser/);
+  assert.match(page, /chatGPTSignInPath/);
+  assert.match(social, /oai-authenticated-user-id/);
+  assert.match(social, /oai-authenticated-user-email/);
+  assert.doesNotMatch(social, /x-whisper-device-id/);
+  assert.match(contacts, /INSERT OR IGNORE INTO contacts/);
+  assert.match(contacts, /status = 'accepted'/);
+  assert.match(blocks, /DELETE FROM contacts/);
+  assert.match(reports, /INSERT INTO reports/);
+  assert.doesNotMatch(reports, /ciphertext|SELECT.+messages/is);
+  assert.match(conversations, /Every conversation member must be an accepted, unblocked contact/);
+  assert.match(conversations, /memberIds/);
+  assert.match(messages, /Messages are disabled because a conversation member is blocked/);
+  assert.match(schema, /contactInvitations/);
+  assert.match(schema, /export const blocks/);
+  assert.match(schema, /export const reports/);
+  assert.match(migration, /CREATE TABLE `contact_invitations`/);
+  assert.match(client, /Contact invitation sent/);
+  assert.match(client, /Report submitted for review/);
+  assert.match(client, /Secure contact key exchange is required before messaging/);
 });
 
 test("stores reply context inside encrypted message content", async () => {

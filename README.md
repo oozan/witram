@@ -2,12 +2,19 @@
 
 Whisper is a responsive Telegram-inspired chat application with client-side message encryption and durable ciphertext storage.
 
-## 0.3 milestone
+## 0.4 milestone
 
-The 0.3 release turns the private-chat MVP into a more complete daily-use experience: unread and archive workflows, message copying, local exports, persistent themes and density controls, reduced motion, keyboard guidance, accessible selected states, and long-chat position preservation now complement the encrypted messaging foundation. The build and automated security-boundary checks cover the release.
+The 0.4 release adds Whisper's first real social trust layer: authenticated profiles, contact invitations, accepted-contact membership, blocking, and report intake now sit in front of the encrypted messaging foundation. Multi-account messaging stays visibly locked until authenticated key exchange is implemented in the next security milestone.
 
 ## What works
 
+- ChatGPT-backed registration and sign-in without app-owned passwords
+- Durable user profiles with editable display names
+- Contact invitations between registered Whisper accounts
+- Accept and decline workflows with symmetric contact records
+- Server-enforced conversation membership limited to accepted, unblocked contacts
+- Account blocking that removes contact relationships and prevents new messages
+- Privacy-conscious account reporting with categories, optional details, and moderation status
 - Responsive desktop and mobile conversation UI
 - Device-persisted light and dark appearance themes
 - Comfortable and compact chat density preferences
@@ -39,7 +46,7 @@ The 0.3 release turns the private-chat MVP into a more complete daily-use experi
 - Cloudflare D1 persistence containing ciphertext and IVs, never message plaintext
 - Server-side conversation membership checks
 - Payload size limits, no-store API responses, and baseline browser security headers
-- ChatGPT/Sites identity headers in production with a local development device identity fallback
+- ChatGPT/Sites identity headers enforced by every account and chat API
 - Generated and versioned database migrations
 
 ## Run locally
@@ -72,7 +79,7 @@ The test command creates the production build and verifies the rendered product 
 
 Message bodies are encrypted on the sender's device with AES-256-GCM. The API validates and stores only ciphertext, a unique initialization vector, sender identity, and routing metadata. Conversation keys are generated as non-exportable Web Crypto keys and kept in IndexedDB.
 
-This repository is an MVP, not an audited messenger protocol. The current experience supports durable encrypted messages on the device that created the conversation key. Secure key exchange, contact invitation, multi-device key transfer, key rotation, forward secrecy, push notifications, media encryption, abuse controls, and account recovery are intentionally not represented as complete. Those are required before treating it as a production replacement for Telegram or Signal.
+This repository is an MVP, not an audited messenger protocol. Accounts, contact invitations, membership, blocking, and report intake are now implemented. Message encryption still uses a device-local conversation key, so newly connected accounts cannot exchange messages until authenticated key exchange is implemented; the interface explicitly keeps that composer locked. Multi-device key transfer, key rotation, forward secrecy, push notifications, encrypted media, a staffed moderation workflow, and account recovery are still required before treating Whisper as a production replacement for Telegram or Signal.
 
 ## Project shape
 
@@ -80,6 +87,10 @@ This repository is an MVP, not an audited messenger protocol. The current experi
 - `app/client-crypto.ts` — device-side encryption and key vault
 - `app/api/conversations/route.ts` — durable user-owned conversation API
 - `app/api/messages/route.ts` — membership-protected ciphertext-only message API
+- `app/api/account/route.ts` — profile registration and updates
+- `app/api/contacts/route.ts` — invitations and accepted contacts
+- `app/api/blocks/route.ts` — contact blocking and unblocking
+- `app/api/reports/route.ts` — moderation report intake
 - `db/schema.ts` — relational data model
 - `drizzle/` — generated D1 migration
 - `.openai/hosting.json` — deployment bindings

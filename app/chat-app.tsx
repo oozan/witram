@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
-import { decryptMessage, encryptMessage, getDeviceId } from "./client-crypto";
+import { decryptMessage, encryptMessage } from "./client-crypto";
 
 type Message = {
   id: number | string;
@@ -51,106 +51,24 @@ type Chat = {
   messages: Message[];
   kind?: "direct" | "group" | "saved";
   persisted?: boolean;
+  memberIds?: string[];
 };
 
+type CurrentUser = { id: string; email: string; displayName: string };
+type Person = { id: string; email: string; displayName: string; createdAt?: string };
+type ContactInvitation = { id: string; person: Person; createdAt: string };
+type SocialState = { contacts: Person[]; incoming: ContactInvitation[]; outgoing: ContactInvitation[]; blocked: Person[] };
+
 const initialChats: Chat[] = [
-  {
-    id: "maya",
-    name: "Maya Chen",
-    initials: "MC",
-    preview: "The sunset there is unreal!",
-    time: "10:42",
-    unread: 2,
-    online: true,
-    pinned: true,
-    kind: "direct",
-    color: "coral",
-    messages: [
-      { id: 1, text: "Hey! Did you make it to Lisbon?", time: "10:31" },
-      {
-        id: 2,
-        text: "Just landed ☀️ The city already feels amazing.",
-        time: "10:33",
-        mine: true,
-        status: "read",
-      },
-      {
-        id: 3,
-        text: "You have to go up to Miradouro da Senhora. The sunset there is unreal!",
-        time: "10:38",
-      },
-      {
-        id: 4,
-        replyTo: "The sunset there is unreal!",
-        text: "Adding it to today's plan. Send me your food list too?",
-        time: "10:40",
-        mine: true,
-        status: "read",
-      },
-      { id: 5, text: "Already typing it up for you ✨", time: "10:42" },
-    ],
-  },
-  {
-    id: "product",
-    name: "Product Crew",
-    initials: "PC",
-    preview: "Noah: New prototype is live",
-    time: "09:18",
-    unread: 5,
-    pinned: true,
-    kind: "group",
-    color: "blue",
-    messages: [
-      { id: 1, text: "Morning team — the new prototype is live.", time: "09:12" },
-      { id: 2, text: "Opening it now. The transitions look sharp!", time: "09:18", mine: true, status: "read" },
-    ],
-  },
-  {
-    id: "leo",
-    name: "Leo Martins",
-    initials: "LM",
-    preview: "Voice message · 0:24",
-    time: "Yesterday",
-    color: "amber",
-    kind: "direct",
-    messages: [
-      { id: 1, text: "Voice message · 0:24", time: "18:06" },
-      { id: 2, text: "I'll listen on the way home.", time: "18:10", mine: true, status: "read" },
-    ],
-  },
-  {
-    id: "nina",
-    name: "Nina & 6 others",
-    initials: "N+",
-    preview: "Photo",
-    time: "Yesterday",
-    muted: true,
-    kind: "group",
-    color: "violet",
-    messages: [{ id: 1, text: "Photo · Weekend plans are officially happening!", time: "17:44" }],
-  },
   {
     id: "saved",
     name: "Saved Messages",
     initials: "★",
-    preview: "Train tickets.pdf",
-    time: "Mon",
+    preview: "Your private notes stay encrypted",
+    time: "Now",
     color: "cyan",
     kind: "saved",
-    messages: [
-      { id: 1, text: "Train tickets.pdf", time: "08:15", mine: true, status: "sent" },
-      { id: 2, text: "Ideas for the autumn launch", time: "08:17", mine: true, status: "sent" },
-    ],
-  },
-  {
-    id: "omar",
-    name: "Omar Aziz",
-    initials: "OA",
-    preview: "See you Thursday!",
-    time: "Sun",
-    color: "green",
-    kind: "direct",
-    messages: [{ id: 1, text: "See you Thursday!", time: "16:22" }],
+    messages: [],
   },
 ];
 
@@ -256,9 +174,9 @@ function MessageText({ text }: { text: string }) {
     : part)}</p>;
 }
 
-export function ChatApp() {
+export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [chats, setChats] = useState(initialChats);
-  const [activeId, setActiveId] = useState("maya");
+  const [activeId, setActiveId] = useState("saved");
   const [query, setQuery] = useState("");
   const [conversationFilter, setConversationFilter] = useState<"all" | "unread" | "groups" | "saved" | "archived">("all");
   const [draft, setDraft] = useState("");
@@ -273,8 +191,16 @@ export function ChatApp() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [showNewChat, setShowNewChat] = useState(false);
-  const [newChatName, setNewChatName] = useState("");
   const [creatingChat, setCreatingChat] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
+  const [accountName, setAccountName] = useState(currentUser.displayName);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [social, setSocial] = useState<SocialState>({ contacts: [], incoming: [], outgoing: [], blocked: [] });
+  const [socialLoading, setSocialLoading] = useState(true);
+  const [socialAction, setSocialAction] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [reportCategory, setReportCategory] = useState("spam");
+  const [reportDetails, setReportDetails] = useState("");
   const [syncState, setSyncState] = useState<"online" | "syncing" | "offline">("syncing");
   const [syncRevision, setSyncRevision] = useState(0);
   const [showChatSearch, setShowChatSearch] = useState(false);
@@ -297,6 +223,7 @@ export function ChatApp() {
   const userAwayFromBottomRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
+  const awaitingKeyExchange = Boolean(activeChat.memberIds?.length);
   const pinnedMessage = activeChat.messages.find((message) => String(message.id) === pinnedMessageId && !message.deleted);
   const visibleChats = useMemo(
     () => chats
@@ -337,6 +264,8 @@ export function ChatApp() {
         setMessageMenuTarget(null);
         setDeleteTarget(null);
         setShowShortcutHelp(false);
+        setShowAccount(false);
+        setReportTarget(null);
         if (editingMessage) {
           setDraft(editingMessage.previousDraft);
           setEditingMessage(null);
@@ -357,6 +286,28 @@ export function ChatApp() {
       setChats((current) => current.map(withChatPreferences));
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAccountAndContacts() {
+      setSocialLoading(true);
+      try {
+        const [accountResponse, contactsResponse] = await Promise.all([fetch("/api/account"), fetch("/api/contacts")]);
+        const accountPayload = await accountResponse.json() as { account?: CurrentUser; error?: string };
+        const contactsPayload = await contactsResponse.json() as Partial<SocialState> & { error?: string };
+        if (!accountResponse.ok || !contactsResponse.ok || !accountPayload.account) throw new Error(accountPayload.error ?? contactsPayload.error ?? "Account sync failed");
+        if (cancelled) return;
+        setAccountName(accountPayload.account.displayName);
+        setSocial({ contacts: contactsPayload.contacts ?? [], incoming: contactsPayload.incoming ?? [], outgoing: contactsPayload.outgoing ?? [], blocked: contactsPayload.blocked ?? [] });
+      } catch (error) {
+        if (!cancelled) flash(error instanceof Error ? error.message : "Account sync failed");
+      } finally {
+        if (!cancelled) setSocialLoading(false);
+      }
+    }
+    void loadAccountAndContacts();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -391,10 +342,10 @@ export function ChatApp() {
     let cancelled = false;
     async function loadConversations() {
       try {
-        const response = await fetch("/api/conversations", { headers: { "x-whisper-device-id": getDeviceId() } });
+        const response = await fetch("/api/conversations");
         if (!response.ok) throw new Error("Conversation sync failed");
         const payload = await response.json() as {
-          conversations?: Array<{ id: string; title: string; kind: Chat["kind"]; lastActivity: string; messageCount: number }>;
+          conversations?: Array<{ id: string; title: string; kind: Chat["kind"]; lastActivity: string; messageCount: number; memberIds: string[] }>;
         };
         if (cancelled) return;
         setChats((current) => {
@@ -409,8 +360,11 @@ export function ChatApp() {
             messages: [],
             kind: chat.kind,
             persisted: true,
+            memberIds: chat.memberIds,
           }));
-          return restored.length ? [...restored, ...current] : current;
+          const memberIdsByChat = new Map((payload.conversations ?? []).map((chat) => [chat.id, chat.memberIds]));
+          const refreshed = current.map((chat) => memberIdsByChat.has(chat.id) ? { ...chat, memberIds: memberIdsByChat.get(chat.id) } : chat);
+          return restored.length ? [...restored, ...refreshed] : refreshed;
         });
         setSyncState("online");
       } catch {
@@ -456,9 +410,7 @@ export function ChatApp() {
     async function loadEncryptedMessages() {
       setSyncState((current) => current === "offline" ? "syncing" : current);
       try {
-        const response = await fetch(`/api/messages?conversationId=${encodeURIComponent(activeId)}`, {
-          headers: { "x-whisper-device-id": getDeviceId() },
-        });
+        const response = await fetch(`/api/messages?conversationId=${encodeURIComponent(activeId)}`);
         if (!response.ok) throw new Error("Message sync failed");
         const payload = await response.json() as {
           messages?: Array<{ id: string; ciphertext: string; iv: string; createdAt: string; mine: boolean }>;
@@ -580,8 +532,8 @@ export function ChatApp() {
       if (!chat.persisted) {
         const createResponse = await fetch("/api/conversations", {
           method: "POST",
-          headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
-          body: JSON.stringify({ title: chat.name, kind: chat.kind ?? "direct" }),
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: chat.name, kind: chat.kind ?? "direct", memberIds: chat.memberIds ?? [] }),
         });
         const created = await createResponse.json() as { conversation?: { id: string }; error?: string };
         if (!createResponse.ok || !created.conversation) throw new Error(created.error ?? "Conversation creation failed");
@@ -598,7 +550,7 @@ export function ChatApp() {
       const encrypted = await encryptMessage(secureChat.id, storedContent);
       const response = await fetch("/api/messages", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           conversationId: secureChat.id,
           ...encrypted,
@@ -621,16 +573,14 @@ export function ChatApp() {
     }
   }
 
-  async function createConversation(event: FormEvent) {
-    event.preventDefault();
-    const title = newChatName.trim();
-    if (!title || creatingChat) return;
+  async function createConversation(contact: Person) {
+    if (creatingChat) return;
     setCreatingChat(true);
     try {
       const response = await fetch("/api/conversations", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
-        body: JSON.stringify({ title, kind: "direct" }),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: contact.displayName, kind: "direct", memberIds: [contact.id] }),
       });
       const payload = await response.json() as { conversation?: { id: string; title: string }; error?: string };
       if (!response.ok || !payload.conversation) throw new Error(payload.error ?? "Conversation creation failed");
@@ -644,12 +594,12 @@ export function ChatApp() {
         messages: [],
         kind: "direct",
         persisted: true,
+        memberIds: [contact.id],
       };
       setChats((current) => [chat, ...current]);
       setActiveId(chat.id);
       setDraft("");
       setMobileChatOpen(true);
-      setNewChatName("");
       setShowNewChat(false);
       setSyncState("online");
       flash("Private conversation created");
@@ -660,8 +610,127 @@ export function ChatApp() {
     }
   }
 
+  async function refreshSocial() {
+    const response = await fetch("/api/contacts");
+    const payload = await response.json() as Partial<SocialState> & { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? "Contacts could not be refreshed");
+    setSocial({ contacts: payload.contacts ?? [], incoming: payload.incoming ?? [], outgoing: payload.outgoing ?? [], blocked: payload.blocked ?? [] });
+  }
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    if (socialAction) return;
+    setSocialAction(true);
+    try {
+      const response = await fetch("/api/account", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ displayName: accountName }),
+      });
+      const payload = await response.json() as { account?: CurrentUser; error?: string };
+      if (!response.ok || !payload.account) throw new Error(payload.error ?? "Profile could not be updated");
+      setAccountName(payload.account.displayName);
+      flash("Profile updated");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Profile could not be updated");
+    } finally {
+      setSocialAction(false);
+    }
+  }
+
+  async function sendContactInvitation(event: FormEvent) {
+    event.preventDefault();
+    if (!inviteEmail.trim() || socialAction) return;
+    setSocialAction(true);
+    try {
+      const response = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Invitation could not be sent");
+      setInviteEmail("");
+      await refreshSocial();
+      flash("Contact invitation sent");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Invitation could not be sent");
+    } finally {
+      setSocialAction(false);
+    }
+  }
+
+  async function respondToInvitation(invitationId: string, action: "accept" | "decline") {
+    if (socialAction) return;
+    setSocialAction(true);
+    try {
+      const response = await fetch("/api/contacts", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ invitationId, action }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Invitation could not be updated");
+      await refreshSocial();
+      flash(action === "accept" ? "Contact added" : "Invitation declined");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Invitation could not be updated");
+    } finally {
+      setSocialAction(false);
+    }
+  }
+
+  async function setBlocked(userId: string, shouldBlock: boolean) {
+    if (socialAction) return;
+    if (shouldBlock && !window.confirm("Block this account? You will no longer be able to exchange messages.")) return;
+    setSocialAction(true);
+    try {
+      const response = await fetch("/api/blocks", {
+        method: shouldBlock ? "POST" : "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Block setting could not be updated");
+      await refreshSocial();
+      setShowInfo(false);
+      flash(shouldBlock ? "Account blocked" : "Account unblocked");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Block setting could not be updated");
+    } finally {
+      setSocialAction(false);
+    }
+  }
+
+  async function submitReport(event: FormEvent) {
+    event.preventDefault();
+    if (!reportTarget || socialAction) return;
+    setSocialAction(true);
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: reportTarget.userId, conversationId: activeChat.persisted ? activeChat.id : null, category: reportCategory, details: reportDetails }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Report could not be submitted");
+      setReportTarget(null);
+      setReportDetails("");
+      setReportCategory("spam");
+      flash("Report submitted for review");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Report could not be submitted");
+    } finally {
+      setSocialAction(false);
+    }
+  }
+
   function sendMessage(event: FormEvent) {
     event.preventDefault();
+    if (awaitingKeyExchange) {
+      flash("Secure contact key exchange is required before messaging");
+      return;
+    }
     const text = draft.trim();
     if (!text) return;
     if (text.length > MAX_MESSAGE_LENGTH) {
@@ -750,7 +819,7 @@ export function ChatApp() {
     const encrypted = await encryptMessage(chat.id, content);
     const response = await fetch("/api/messages", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ conversationId: chat.id, ...encrypted }),
     });
     if (!response.ok) throw new Error("Encrypted control event storage failed");
@@ -921,12 +990,13 @@ export function ChatApp() {
     <main className={`app-shell theme-${theme} ${compactMode ? "compact-mode" : ""} ${reducedMotion ? "reduce-motion" : ""}`}>
       <section className={`sidebar ${mobileChatOpen ? "sidebar-hidden-mobile" : ""}`} aria-label="Conversation list">
         <header className="sidebar-header">
-          <button className="avatar avatar-me" aria-label="Open profile" onClick={() => flash("Profile settings are ready for the next step")}>OZ</button>
+          <button className="avatar avatar-me" aria-label="Open account and contacts" onClick={() => setShowAccount(true)}>{accountName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "ME"}</button>
           <div className="brand-lockup">
             <strong>Whisper</strong>
             <button className="sync-status-button" aria-live="polite" onClick={retrySecureSync} disabled={syncState === "syncing"} title={syncState === "offline" ? "Retry secure sync" : undefined}><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · retry sync"}</button>
           </div>
           <button className="icon-button theme-toggle" aria-pressed={theme === "dark"} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} onClick={toggleTheme}>{theme === "light" ? "☾" : "☀"}</button>
+          <button className="icon-button contacts-button" aria-label={`Open contacts${social.incoming.length ? `, ${social.incoming.length} pending invitations` : ""}`} onClick={() => setShowAccount(true)}>♧{social.incoming.length > 0 && <b>{social.incoming.length}</b>}</button>
           <button className="icon-button new-chat" aria-label="Start new chat" onClick={() => setShowNewChat(true)}>＋</button>
         </header>
 
@@ -1087,6 +1157,7 @@ export function ChatApp() {
         </div>
 
         <div className="composer-zone">
+          {awaitingKeyExchange && <div className="key-exchange-notice"><strong>Membership secured</strong><span>Messaging unlocks after the next milestone adds authenticated contact key exchange.</span></div>}
           {showMediaPicker && (
             <div className="media-picker" aria-label="Emoji and GIF picker">
               <div className="picker-tabs">
@@ -1130,9 +1201,9 @@ export function ChatApp() {
           )}
           <form className="composer" onSubmit={sendMessage}>
             <button type="button" className="composer-button" aria-label="Encrypted attachments are not available yet" title="Encrypted attachments are not available yet" disabled>⌇</button>
-            <input maxLength={MAX_MESSAGE_LENGTH} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message…" aria-label="Message" />
-            <button type="button" className={`composer-button ${showMediaPicker ? "active" : ""}`} aria-label="Add emoji or GIF" onClick={() => setShowMediaPicker((value) => !value)}>☺</button>
-            <button type={draft.trim() ? "submit" : "button"} className={`send-button ${draft.trim() ? "ready" : ""}`} aria-label={draft.trim() ? "Send message" : "Encrypted voice messages are not available yet"} onClick={() => !draft.trim() && flash("Encrypted voice messages are not available yet")}>
+            <input maxLength={MAX_MESSAGE_LENGTH} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={awaitingKeyExchange ? "Secure key exchange required" : "Write a message…"} aria-label="Message" disabled={awaitingKeyExchange} />
+            <button type="button" className={`composer-button ${showMediaPicker ? "active" : ""}`} aria-label="Add emoji or GIF" onClick={() => setShowMediaPicker((value) => !value)} disabled={awaitingKeyExchange}>☺</button>
+            <button type={draft.trim() ? "submit" : "button"} className={`send-button ${draft.trim() && !awaitingKeyExchange ? "ready" : ""}`} aria-label={awaitingKeyExchange ? "Secure key exchange required" : draft.trim() ? "Send message" : "Encrypted voice messages are not available yet"} onClick={() => !draft.trim() && !awaitingKeyExchange && flash("Encrypted voice messages are not available yet")} disabled={awaitingKeyExchange}>
               {draft.trim() ? "➤" : "♩"}
             </button>
           </form>
@@ -1153,12 +1224,16 @@ export function ChatApp() {
             <button onClick={openChatSearch}><span>⌕</span>Search</button>
           </div>
           <div className="info-card">
-            <div><span>Encryption</span><strong>Verified</strong></div>
+            <div><span>Encryption</span><strong>Device key active</strong></div>
             <p>Messages are secured with keys stored on this device.</p>
-            <button onClick={() => flash("Safety number copied")}>View safety number</button>
+            <button onClick={() => flash("Cross-device safety verification is planned for the key-exchange milestone")}>About key verification</button>
           </div>
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
           <button className="archive-chat-action export-chat-action" onClick={exportConversation}>Export conversation</button>
+          {!!activeChat.memberIds?.[0] && <div className="trust-actions">
+            <button onClick={() => void setBlocked(activeChat.memberIds![0], true)}>Block account</button>
+            <button onClick={() => setReportTarget({ userId: activeChat.memberIds![0], name: activeChat.name })}>Report account</button>
+          </div>}
           <div className="preference-actions">
             <button onClick={markConversationUnread}><span>Conversation</span><strong>Mark unread</strong></button>
             <button aria-pressed={compactMode} onClick={toggleCompactMode}><span>Density</span><strong>{compactMode ? "Compact" : "Comfortable"}</strong></button>
@@ -1174,16 +1249,53 @@ export function ChatApp() {
           <section className="new-chat-modal" role="dialog" aria-modal="true" aria-labelledby="new-chat-title">
             <button className="modal-close" onClick={() => setShowNewChat(false)} aria-label="Close new conversation">×</button>
             <span className="modal-icon">⌁</span>
-            <h2 id="new-chat-title">New private conversation</h2>
-            <p>Create an encrypted space. Only ciphertext is stored on the server.</p>
-            <form onSubmit={createConversation}>
-              <label htmlFor="new-chat-name">Conversation name</label>
-              <input id="new-chat-name" maxLength={80} value={newChatName} onChange={(event) => setNewChatName(event.target.value)} placeholder="e.g. Project Atlas" />
-              <div className="modal-actions">
-                <button type="button" onClick={() => setShowNewChat(false)}>Cancel</button>
-                <button className="primary" type="submit" disabled={!newChatName.trim() || creatingChat}>{creatingChat ? "Creating…" : "Create chat"}</button>
-              </div>
+            <h2 id="new-chat-title">Start a private conversation</h2>
+            <p>Choose an accepted contact. Both accounts become enforced members of the conversation.</p>
+            <div className="people-list compact-people-list">
+              {social.contacts.length ? social.contacts.map((contact) => (
+                <button key={contact.id} className="person-row" onClick={() => void createConversation(contact)} disabled={creatingChat}>
+                  <span className="person-avatar">{contact.displayName.slice(0, 2).toUpperCase()}</span>
+                  <span><strong>{contact.displayName}</strong><small>{contact.email}</small></span>
+                  <b>{creatingChat ? "…" : "Chat"}</b>
+                </button>
+              )) : <div className="social-empty"><strong>No accepted contacts yet</strong><span>Open your account panel and invite someone by email first.</span></div>}
+            </div>
+            <div className="modal-actions"><button type="button" onClick={() => setShowNewChat(false)}>Close</button><button className="primary" type="button" onClick={() => { setShowNewChat(false); setShowAccount(true); }}>Manage contacts</button></div>
+          </section>
+        </div>
+      )}
+
+      {showAccount && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowAccount(false)}>
+          <section className="new-chat-modal account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
+            <button className="modal-close" onClick={() => setShowAccount(false)} aria-label="Close account and contacts">×</button>
+            <div className="account-heading"><span className="avatar avatar-me">{accountName.slice(0, 2).toUpperCase()}</span><span><p>Signed in as</p><h2 id="account-title">{accountName}</h2><small>{currentUser.email}</small></span></div>
+            <form className="profile-form" onSubmit={saveProfile}>
+              <label htmlFor="profile-name">Display name</label>
+              <div><input id="profile-name" maxLength={60} value={accountName} onChange={(event) => setAccountName(event.target.value)} /><button type="submit" disabled={socialAction || accountName.trim().length < 2}>Save</button></div>
             </form>
+            <section className="social-section">
+              <div className="social-title"><h3>Contacts</h3><span>{social.contacts.length}</span></div>
+              <form className="invite-form" onSubmit={sendContactInvitation}><input type="email" maxLength={254} value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="Invite by registered email" aria-label="Contact email" /><button disabled={socialAction || !inviteEmail.trim()}>Invite</button></form>
+              {socialLoading ? <p className="social-loading">Loading your trusted network…</p> : <div className="people-list">
+                {social.incoming.map((invitation) => <div className="person-row invitation-row" key={invitation.id}><span className="person-avatar">{invitation.person.displayName.slice(0, 2).toUpperCase()}</span><span><strong>{invitation.person.displayName}</strong><small>wants to connect</small></span><span className="invitation-actions"><button onClick={() => void respondToInvitation(invitation.id, "decline")}>Decline</button><button className="accept" onClick={() => void respondToInvitation(invitation.id, "accept")}>Accept</button></span></div>)}
+                {social.contacts.map((contact) => <div className="person-row" key={contact.id}><span className="person-avatar">{contact.displayName.slice(0, 2).toUpperCase()}</span><span><strong>{contact.displayName}</strong><small>{contact.email}</small></span><span className="person-actions"><button onClick={() => { setShowAccount(false); setShowNewChat(true); }}>Message</button><button className="danger-text" onClick={() => void setBlocked(contact.id, true)}>Block</button></span></div>)}
+                {!social.contacts.length && !social.incoming.length && <div className="social-empty"><strong>Your contacts will appear here</strong><span>The other person must sign in once before an invitation can be delivered.</span></div>}
+              </div>}
+              {!!social.outgoing.length && <div className="pending-list"><strong>Pending invitations</strong>{social.outgoing.map((invitation) => <span key={invitation.id}>{invitation.person.displayName} · waiting</span>)}</div>}
+              {!!social.blocked.length && <div className="blocked-list"><strong>Blocked accounts</strong>{social.blocked.map((person) => <div key={person.id}><span>{person.displayName}</span><button onClick={() => void setBlocked(person.id, false)}>Unblock</button></div>)}</div>}
+            </section>
+            <a className="sign-out-link" href="/signout-with-chatgpt?return_to=%2F">Sign out of Whisper</a>
+          </section>
+        </div>
+      )}
+
+      {reportTarget && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setReportTarget(null)}>
+          <section className="new-chat-modal report-modal" role="dialog" aria-modal="true" aria-labelledby="report-title">
+            <button className="modal-close" onClick={() => setReportTarget(null)} aria-label="Close report">×</button>
+            <span className="modal-icon danger-icon">!</span><h2 id="report-title">Report {reportTarget.name}</h2><p>Reports are stored for moderation review. Message plaintext is not attached automatically.</p>
+            <form onSubmit={submitReport}><label htmlFor="report-category">Reason</label><select id="report-category" value={reportCategory} onChange={(event) => setReportCategory(event.target.value)}><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="impersonation">Impersonation</option><option value="illegal">Illegal content</option><option value="other">Other</option></select><label htmlFor="report-details">Additional details (optional)</label><textarea id="report-details" maxLength={1000} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="Describe what happened without including sensitive information." /><div className="modal-actions"><button type="button" onClick={() => setReportTarget(null)}>Cancel</button><button className="danger-action" type="submit" disabled={socialAction}>Submit report</button></div></form>
           </section>
         </div>
       )}

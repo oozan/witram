@@ -8,6 +8,13 @@
       "when": 1786458394796,
       "tag": "0000_wandering_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787562800653,
+      "tag": "0001_outgoing_the_professor",
+      "breakpoints": true
     }
   ]
 }
