@@ -13,6 +13,12 @@ export function database() {
   return env.DB;
 }
 
+export function mediaBucket() {
+  const bucket = (env as unknown as { MEDIA?: R2Bucket }).MEDIA;
+  if (!bucket) throw new Error("R2 binding MEDIA is unavailable");
+  return bucket;
+}
+
 export function identity(request: Request): AuthenticatedIdentity | null {
   const userId = request.headers.get("oai-authenticated-user-id")?.trim();
   const email = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
@@ -123,6 +129,23 @@ export async function initializeDatabase() {
       sender_device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      plaintext_size TEXT NOT NULL,
+      ciphertext_size TEXT NOT NULL,
+      thumbnail_ciphertext_size TEXT,
+      object_key TEXT NOT NULL,
+      thumbnail_object_key TEXT,
+      retention TEXT NOT NULL DEFAULT '7d',
+      status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS mls_welcomes (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -176,6 +199,9 @@ export async function initializeDatabase() {
     )`),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_object_key ON attachments(object_key)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_attachments_conversation_status ON attachments(conversation_id, status)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_attachments_expiry_status ON attachments(expires_at, status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_devices_user_active ON devices(user_id, active)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_device_key_packages_available ON device_key_packages(device_id, consumed_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_device_link_sessions_code_hash ON device_link_sessions(code_hash)"),

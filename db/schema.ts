@@ -174,6 +174,32 @@ export const messages = sqliteTable(
   (table) => [index("idx_messages_conversation_created_at").on(table.conversationId, table.createdAt)],
 );
 
+export const attachments = sqliteTable(
+  "attachments",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["image", "video", "gif", "audio", "file"] }).notNull(),
+    plaintextSize: text("plaintext_size").notNull(),
+    ciphertextSize: text("ciphertext_size").notNull(),
+    thumbnailCiphertextSize: text("thumbnail_ciphertext_size"),
+    objectKey: text("object_key").notNull(),
+    thumbnailObjectKey: text("thumbnail_object_key"),
+    retention: text("retention", { enum: ["1d", "7d", "30d", "forever"] }).notNull().default("7d"),
+    status: text("status", { enum: ["pending", "ready", "deleted"] }).notNull().default("pending"),
+    expiresAt: text("expires_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    deletedAt: text("deleted_at"),
+  },
+  (table) => [
+    uniqueIndex("idx_attachments_object_key").on(table.objectKey),
+    index("idx_attachments_conversation_status").on(table.conversationId, table.status),
+    index("idx_attachments_expiry_status").on(table.expiresAt, table.status),
+  ],
+);
+
 export const mlsWelcomes = sqliteTable(
   "mls_welcomes",
   {

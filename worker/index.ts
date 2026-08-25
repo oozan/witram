@@ -5,6 +5,7 @@ import handler from "vinext/server/app-router-entry";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  MEDIA: R2Bucket;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -49,7 +50,7 @@ function withSecurityHeaders(response: Response, request: Request) {
   const secured = new Response(response.body, response);
   secured.headers.set("x-content-type-options", "nosniff");
   secured.headers.set("referrer-policy", "strict-origin-when-cross-origin");
-  secured.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  secured.headers.set("permissions-policy", "camera=(), microphone=(self), geolocation=(), payment=()");
   secured.headers.set("cross-origin-opener-policy", "same-origin");
   if (new URL(request.url).protocol === "https:") {
     secured.headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
