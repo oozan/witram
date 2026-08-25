@@ -6,6 +6,7 @@ export const users = sqliteTable("users", {
   email: text("email"),
   displayName: text("display_name"),
   publicKey: text("public_key"),
+  identityPublicKey: text("identity_public_key"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("idx_users_email").on(table.email)]);
@@ -16,6 +17,24 @@ export const conversations = sqliteTable("conversations", {
   kind: text("kind", { enum: ["direct", "group", "saved"] }).notNull().default("direct"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const devices = sqliteTable(
+  "devices",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    identityPublicKey: text("identity_public_key").notNull(),
+    identitySignature: text("identity_signature").notNull(),
+    keyPackage: text("key_package").notNull(),
+    keyPackageSignature: text("key_package_signature").notNull(),
+    keyPackageVersion: text("key_package_version").notNull().default("1"),
+    active: text("active").notNull().default("1"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_devices_user_active").on(table.userId, table.active)],
+);
 
 export const conversationMembers = sqliteTable(
   "conversation_members",
@@ -98,7 +117,44 @@ export const messages = sqliteTable(
     ciphertext: text("ciphertext").notNull(),
     iv: text("iv").notNull(),
     algorithm: text("algorithm").notNull().default("AES-GCM-256"),
+    protocol: text("protocol").notNull().default("legacy-aes-gcm"),
+    epoch: text("epoch"),
+    senderDeviceId: text("sender_device_id").references(() => devices.id, { onDelete: "set null" }),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [index("idx_messages_conversation_created_at").on(table.conversationId, table.createdAt)],
+);
+
+export const mlsWelcomes = sqliteTable(
+  "mls_welcomes",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    recipientUserId: text("recipient_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    recipientDeviceId: text("recipient_device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+    recipientKeyPackageVersion: text("recipient_key_package_version").notNull(),
+    senderDeviceId: text("sender_device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+    welcome: text("welcome").notNull(),
+    ratchetTree: text("ratchet_tree").notNull(),
+    claimedAt: text("claimed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_mls_welcomes_recipient_claimed").on(table.recipientDeviceId, table.claimedAt),
+    uniqueIndex("idx_mls_welcomes_key_package_once").on(table.recipientDeviceId, table.recipientKeyPackageVersion),
+  ],
+);
+
+export const mlsEvents = sqliteTable(
+  "mls_events",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    senderDeviceId: text("sender_device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["commit"] }).notNull(),
+    payload: text("payload").notNull(),
+    epoch: text("epoch").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_mls_events_conversation_created").on(table.conversationId, table.createdAt)],
 );

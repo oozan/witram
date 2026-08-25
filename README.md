@@ -1,10 +1,10 @@
 # Whisper
 
-Whisper is a responsive Telegram-inspired chat application with client-side message encryption and durable ciphertext storage.
+Whisper is a responsive Telegram-inspired chat application with client-side encryption and durable ciphertext storage.
 
-## 0.4 milestone
+## 0.5 milestone
 
-The 0.4 release adds Whisper's first real social trust layer: authenticated profiles, contact invitations, accepted-contact membership, blocking, and report intake now sit in front of the encrypted messaging foundation. Multi-account messaging stays visibly locked until authenticated key exchange is implemented in the next security milestone.
+The 0.5 release replaces the direct-chat placeholder with an RFC 9420 Messaging Layer Security (MLS) flow. Accounts publish signed per-device key packages, conversation creators deliver MLS Welcome messages, recipients advance through authenticated epochs, and people can compare a stable safety number out of band. Saved Messages retain the original device-local AES-GCM vault.
 
 ## What works
 
@@ -41,7 +41,13 @@ The 0.4 release adds Whisper's first real social trust layer: authenticated prof
 - Working unread/group/saved/archive filters plus device-persisted pin, mute, and archive preferences
 - Device-persisted “mark as unread” reminders that clear when a chat is reopened
 - Optimistic sending with delivered, read, and failed states
-- AES-256-GCM encryption in the browser before network transmission
+- RFC 9420 MLS encryption for direct-chat messages and encrypted control events
+- Per-account Ed25519 identity keys and separately signed per-device identity keys
+- Signed, versioned, single-use MLS key packages and server-stored opaque Welcome messages
+- Forward secrecy through the MLS secret tree and user-triggered epoch rotation
+- Stable safety numbers with device-local verified state
+- Non-exportable Web Crypto identity private keys in IndexedDB
+- AES-256-GCM encryption for Saved Messages in the browser before network transmission
 - Non-exportable conversation keys stored in IndexedDB on the device
 - Cloudflare D1 persistence containing ciphertext and IVs, never message plaintext
 - Server-side conversation membership checks
@@ -77,14 +83,17 @@ The test command creates the production build and verifies the rendered product 
 
 ## Security model
 
-Message bodies are encrypted on the sender's device with AES-256-GCM. The API validates and stores only ciphertext, a unique initialization vector, sender identity, and routing metadata. Conversation keys are generated as non-exportable Web Crypto keys and kept in IndexedDB.
+Direct-chat bodies are encrypted by `ts-mls` 1.6 using the RFC 9420 ciphersuite `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519`. The server validates account membership and signed device bundles but stores only MLS ciphertext, public commits, Welcome payloads, and routing metadata. Saved Messages continue to use AES-256-GCM with a non-exportable browser key.
 
-This repository is an MVP, not an audited messenger protocol. Accounts, contact invitations, membership, blocking, and report intake are now implemented. Message encryption still uses a device-local conversation key, so newly connected accounts cannot exchange messages until authenticated key exchange is implemented; the interface explicitly keeps that composer locked. Multi-device key transfer, key rotation, forward secrecy, push notifications, encrypted media, a staffed moderation workflow, and account recovery are still required before treating Whisper as a production replacement for Telegram or Signal.
+This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates a standardized protocol; that is not the same as an audited product. A second browser for an existing account is deliberately rejected until a secure account-key transfer/linking ceremony exists. Encrypted media, group membership changes, secure account recovery, push notifications, XSS hardening review, abuse operations, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
 
 ## Project shape
 
 - `app/chat-app.tsx` — product interface and chat interactions
 - `app/client-crypto.ts` — device-side encryption and key vault
+- `app/mls-crypto.ts` — browser MLS state, key packages, epochs, and safety numbers
+- `app/api/keys/route.ts` — authenticated account/device identity directory
+- `app/api/mls/` — opaque MLS Welcome and public-commit transport
 - `app/api/conversations/route.ts` — durable user-owned conversation API
 - `app/api/messages/route.ts` — membership-protected ciphertext-only message API
 - `app/api/account/route.ts` — profile registration and updates

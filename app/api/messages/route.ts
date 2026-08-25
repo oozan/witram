@@ -6,6 +6,9 @@ type StoredMessage = {
   sender_id: string;
   ciphertext: string;
   iv: string;
+  protocol: string;
+  epoch: string | null;
+  sender_device_id: string | null;
   created_at: string;
 };
 
@@ -30,7 +33,7 @@ export async function GET(request: Request) {
   if (!membership) return json({ messages: [] });
 
   const result = await db.prepare(
-    `SELECT id, conversation_id, sender_id, ciphertext, iv, created_at
+    `SELECT id, conversation_id, sender_id, ciphertext, iv, protocol, epoch, sender_device_id, created_at
      FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC LIMIT 250`,
   ).bind(conversationId).all() as D1Result<StoredMessage>;
 
@@ -41,6 +44,9 @@ export async function GET(request: Request) {
       iv: message.iv,
       createdAt: message.created_at,
       mine: message.sender_id === current.userId,
+      protocol: message.protocol,
+      epoch: message.epoch ? Number(message.epoch) : null,
+      senderDeviceId: message.sender_device_id,
     })),
   });
 }
@@ -50,9 +56,9 @@ export async function POST(request: Request) {
   if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > 90_000) return json({ error: "Request body is too large" }, { status: 413 });
+  if (contentLength > 350_000) return json({ error: "Request body is too large" }, { status: 413 });
 
-  let payload: { conversationId?: string; ciphertext?: string; iv?: string };
+  let payload: { conversationId?: string; ciphertext?: string; iv?: string; protocol?: string; epoch?: number; senderDeviceId?: string };
   try {
     payload = await request.json() as typeof payload;
   } catch {
@@ -63,9 +69,11 @@ export async function POST(request: Request) {
   if (!conversationId || !/^[a-z0-9-]{1,80}$/i.test(conversationId)) {
     return json({ error: "A valid conversationId is required" }, { status: 400 });
   }
-  if (!isValidEncryptedField(payload.ciphertext, 64_000) || !isValidEncryptedField(payload.iv, 64)) {
+  const isMls = payload.protocol === "mls-rfc9420-v1";
+  if (!isValidEncryptedField(payload.ciphertext, isMls ? 250_000 : 64_000) || (!isMls && !isValidEncryptedField(payload.iv, 64))) {
     return json({ error: "A valid encrypted message payload is required" }, { status: 400 });
   }
+  if (isMls && (!payload.senderDeviceId || !Number.isSafeInteger(payload.epoch) || Number(payload.epoch) < 0)) return json({ error: "MLS sender device and epoch are required" }, { status: 400 });
 
   await initializeDatabase();
   await registerIdentity(current);
@@ -74,6 +82,9 @@ export async function POST(request: Request) {
     "SELECT 1 AS allowed FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1",
   ).bind(conversationId, current.userId).first();
   if (!membership) return json({ error: "You are not a member of this conversation" }, { status: 403 });
+  const hasOtherMembers = Boolean(await db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id != ? LIMIT 1").bind(conversationId, current.userId).first());
+  if (hasOtherMembers && !isMls) return json({ error: "Multi-account conversations require MLS encryption" }, { status: 400 });
+  if (isMls && !await db.prepare("SELECT 1 FROM devices WHERE id = ? AND user_id = ? AND active = '1' LIMIT 1").bind(payload.senderDeviceId, current.userId).first()) return json({ error: "An active MLS sender device is required" }, { status: 403 });
 
   const blocked = await db.prepare(
     `SELECT 1 FROM conversation_members cm JOIN blocks b
@@ -86,8 +97,8 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   await db.batch([
     db.prepare(
-      "INSERT INTO messages (id, conversation_id, sender_id, ciphertext, iv) VALUES (?, ?, ?, ?, ?)",
-    ).bind(id, conversationId, current.userId, payload.ciphertext, payload.iv),
+      "INSERT INTO messages (id, conversation_id, sender_id, ciphertext, iv, algorithm, protocol, epoch, sender_device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).bind(id, conversationId, current.userId, payload.ciphertext, isMls ? "bWxz" : payload.iv, isMls ? "MLS-1.0" : "AES-GCM-256", isMls ? "mls-rfc9420-v1" : "legacy-aes-gcm", isMls ? String(payload.epoch) : null, isMls ? payload.senderDeviceId : null),
   ]);
 
   return json({ message: { id, createdAt: new Date().toISOString() } }, { status: 201 });

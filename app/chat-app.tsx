@@ -3,6 +3,19 @@
 import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { decryptMessage, encryptMessage } from "./client-crypto";
+import {
+  cacheSentMlsMessage,
+  createMlsConversation,
+  decryptMlsMessage,
+  encryptMlsMessage,
+  ensureMlsDevice,
+  getMlsSessionStatus,
+  getSafetyNumber,
+  joinMlsConversation,
+  markSafetyNumberVerified,
+  rotateMlsEpoch,
+  syncMlsEvents,
+} from "./mls-crypto";
 
 type Message = {
   id: number | string;
@@ -216,6 +229,11 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showScrollLatest, setShowScrollLatest] = useState(false);
   const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
+  const [mlsDeviceId, setMlsDeviceId] = useState<string | null>(null);
+  const [mlsStatuses, setMlsStatuses] = useState<Record<string, { ready: boolean; epoch: number | null; verified: boolean }>>({});
+  const [mlsError, setMlsError] = useState<Record<string, string>>({});
+  const [safetyNumber, setSafetyNumber] = useState<string | null>(null);
+  const [rotatingKeys, setRotatingKeys] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -223,7 +241,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const userAwayFromBottomRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
-  const awaitingKeyExchange = Boolean(activeChat.memberIds?.length);
+  const activeMlsStatus = mlsStatuses[activeChat.id];
+  const awaitingKeyExchange = Boolean(activeChat.memberIds?.length) && !activeMlsStatus?.ready;
   const pinnedMessage = activeChat.messages.find((message) => String(message.id) === pinnedMessageId && !message.deleted);
   const visibleChats = useMemo(
     () => chats
@@ -238,6 +257,47 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     if (!search) return [];
     return activeChat.messages.filter((message) => message.text.toLocaleLowerCase().includes(search)).slice().reverse().slice(0, 20);
   }, [activeChat.messages, chatSearchQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    ensureMlsDevice(currentUser)
+      .then((device) => { if (!cancelled) setMlsDeviceId(device.deviceId); })
+      .catch((error) => { if (!cancelled) setMlsError((current) => ({ ...current, device: error instanceof Error ? error.message : "Device key initialization failed" })); });
+    return () => { cancelled = true; };
+  }, [currentUser]);
+
+  useEffect(() => {
+    const peerId = activeChat.memberIds?.[0];
+    if (!peerId || !activeChat.persisted || !mlsDeviceId) return;
+    let cancelled = false;
+    async function prepareSession() {
+      try {
+        await joinMlsConversation(currentUser, activeChat.id);
+        await syncMlsEvents(activeChat.id, mlsDeviceId!);
+        const status = await getMlsSessionStatus(activeChat.id);
+        if (!cancelled) {
+          setMlsStatuses((current) => ({ ...current, [activeChat.id]: status }));
+          setMlsError((current) => ({ ...current, [activeChat.id]: "" }));
+        }
+      } catch (error) {
+        if (!cancelled) setMlsError((current) => ({ ...current, [activeChat.id]: error instanceof Error ? error.message : "Secure key exchange failed" }));
+      }
+    }
+    void prepareSession();
+    const interval = window.setInterval(prepareSession, 5000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [activeChat.id, activeChat.memberIds, activeChat.persisted, currentUser, mlsDeviceId]);
+
+  useEffect(() => {
+    const peerId = activeChat.memberIds?.[0];
+    if (!showInfo || !peerId || !activeMlsStatus?.ready) {
+      setSafetyNumber(null);
+      return;
+    }
+    let cancelled = false;
+    getSafetyNumber(currentUser, peerId).then((number) => { if (!cancelled) setSafetyNumber(number); }).catch(() => { if (!cancelled) setSafetyNumber(null); });
+    return () => { cancelled = true; };
+  }, [activeChat.memberIds, activeMlsStatus?.ready, currentUser, showInfo]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -413,16 +473,20 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         const response = await fetch(`/api/messages?conversationId=${encodeURIComponent(activeId)}`);
         if (!response.ok) throw new Error("Message sync failed");
         const payload = await response.json() as {
-          messages?: Array<{ id: string; ciphertext: string; iv: string; createdAt: string; mine: boolean }>;
+          messages?: Array<{ id: string; ciphertext: string; iv: string; createdAt: string; mine: boolean; protocol: string; epoch: number | null; senderDeviceId: string | null }>;
         };
-        const decrypted = (await Promise.all((payload.messages ?? []).map(async (message) => {
+        const decrypted: Array<{ id: string; createdAt: string; mine: boolean; content: DecodedStoredContent }> = [];
+        for (const message of payload.messages ?? []) {
           try {
-            const content = decodeStoredMessage(await decryptMessage(activeId, message));
-            return { ...message, content };
+            const isMls = message.protocol === "mls-rfc9420-v1";
+            if (isMls && mlsDeviceId) await syncMlsEvents(activeId, mlsDeviceId, message.epoch ?? undefined);
+            const plaintext = isMls ? await decryptMlsMessage(activeId, message) : await decryptMessage(activeId, message);
+            if (plaintext) decrypted.push({ ...message, content: decodeStoredMessage(plaintext) });
           } catch {
-            return null;
+            // A message from an unavailable epoch remains hidden instead of exposing ciphertext.
           }
-        }))).filter((message): message is NonNullable<typeof message> => message !== null);
+        }
+        if (activeChat.memberIds?.length && mlsDeviceId) await syncMlsEvents(activeId, mlsDeviceId);
         if (cancelled || decrypted.length === 0) return;
         setChats((current) => current.map((chat) => {
           if (chat.id !== activeId) return chat;
@@ -444,21 +508,22 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
           });
           let messages = restored.length ? [...chat.messages, ...restored] : chat.messages;
           for (const record of decrypted) {
-            if (record.content.recordType === "message") continue;
+            const control = record.content;
+            if (control.recordType === "message") continue;
             messages = messages.map((message) => {
-              if (String(message.id) !== record.content.targetId) return message;
-              if (record.content.recordType === "edit") {
-                return message.deleted ? message : { ...message, text: record.content.text, edited: true };
+              if (String(message.id) !== control.targetId) return message;
+              if (control.recordType === "edit") {
+                return message.deleted ? message : { ...message, text: control.text, edited: true };
               }
-              if (record.content.recordType === "delete") {
+              if (control.recordType === "delete") {
                 return { ...message, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, replyToId: undefined, reactions: [], deleted: true };
               }
               const reactions = message.reactions ?? [];
               return {
                 ...message,
-                reactions: record.content.active
-                  ? Array.from(new Set([...reactions, record.content.emoji]))
-                  : reactions.filter((reaction) => reaction !== record.content.emoji),
+                reactions: control.active
+                  ? Array.from(new Set([...reactions, control.emoji]))
+                  : reactions.filter((reaction) => reaction !== control.emoji),
               };
             });
           }
@@ -473,7 +538,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     void loadEncryptedMessages();
     const interval = window.setInterval(loadEncryptedMessages, 5000);
     return () => { cancelled = true; window.clearInterval(interval); };
-  }, [activeId, syncRevision]);
+  }, [activeChat.memberIds, activeId, mlsDeviceId, syncRevision]);
 
   useEffect(() => {
     const element = messageSpaceRef.current;
@@ -547,7 +612,10 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         : message.gif ? `[gif:${message.gif}] ${message.text}`
           : message.replyTo ? `[message]${JSON.stringify({ text: message.text, replyTo: message.replyTo, replyToId: message.replyToId })}`
             : message.text;
-      const encrypted = await encryptMessage(secureChat.id, storedContent);
+      const usesMls = Boolean(secureChat.memberIds?.length);
+      const encrypted = usesMls
+        ? await encryptMlsMessage(secureChat.id, storedContent, String(message.id))
+        : await encryptMessage(secureChat.id, storedContent);
       const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -558,6 +626,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       });
       if (!response.ok) throw new Error("Message storage failed");
       const payload = await response.json() as { message: { id: string } };
+      if (usesMls) await cacheSentMlsMessage(String(message.id), payload.message.id, secureChat.id);
       setChats((current) => current.map((item) =>
         item.id === secureChat.id || item.id === chat.id
           ? { ...item, messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, id: payload.message.id, status: "read" } : entry) }
@@ -584,6 +653,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       });
       const payload = await response.json() as { conversation?: { id: string; title: string }; error?: string };
       if (!response.ok || !payload.conversation) throw new Error(payload.error ?? "Conversation creation failed");
+      const mls = await createMlsConversation(currentUser, payload.conversation.id, [contact.id]);
       const chat: Chat = {
         id: payload.conversation.id,
         name: payload.conversation.title,
@@ -597,12 +667,14 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         memberIds: [contact.id],
       };
       setChats((current) => [chat, ...current]);
+      setMlsDeviceId(mls.deviceId);
+      setMlsStatuses((current) => ({ ...current, [chat.id]: { ready: true, epoch: mls.epoch, verified: false } }));
       setActiveId(chat.id);
       setDraft("");
       setMobileChatOpen(true);
       setShowNewChat(false);
       setSyncState("online");
-      flash("Private conversation created");
+      flash("MLS private conversation created");
     } catch (error) {
       flash(error instanceof Error ? error.message : "Conversation could not be created");
     } finally {
@@ -816,13 +888,44 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   async function persistEncryptedControl(chat: Chat, content: string) {
-    const encrypted = await encryptMessage(chat.id, content);
+    const localId = `control-${crypto.randomUUID()}`;
+    const usesMls = Boolean(chat.memberIds?.length);
+    const encrypted = usesMls ? await encryptMlsMessage(chat.id, content, localId) : await encryptMessage(chat.id, content);
     const response = await fetch("/api/messages", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ conversationId: chat.id, ...encrypted }),
     });
     if (!response.ok) throw new Error("Encrypted control event storage failed");
+    if (usesMls) {
+      const payload = await response.json() as { message: { id: string } };
+      await cacheSentMlsMessage(localId, payload.message.id, chat.id);
+    }
+  }
+
+  async function rotateConversationKeys() {
+    if (rotatingKeys || !activeMlsStatus?.ready) return;
+    setRotatingKeys(true);
+    try {
+      const epoch = await rotateMlsEpoch(activeChat.id);
+      setMlsStatuses((current) => ({ ...current, [activeChat.id]: { ...(current[activeChat.id] ?? { ready: true, verified: false }), ready: true, epoch } }));
+      flash(`Conversation keys rotated to MLS epoch ${epoch}`);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "MLS key rotation failed");
+    } finally {
+      setRotatingKeys(false);
+    }
+  }
+
+  async function verifySafetyNumber() {
+    if (!safetyNumber) return;
+    try {
+      await markSafetyNumberVerified(activeChat.id, safetyNumber);
+      setMlsStatuses((current) => ({ ...current, [activeChat.id]: { ...(current[activeChat.id] ?? { ready: true, epoch: null }), verified: true } }));
+      flash("Safety number marked as verified on this device");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Safety number could not be verified");
+    }
   }
 
   function reactToMessage(messageId: Message["id"], reaction: string) {
@@ -1092,7 +1195,11 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
 
         <div className="encryption-banner">
           <span>⌁</span>
-          <p><strong>Messages are end-to-end encrypted.</strong> No one outside this chat can read them.</p>
+          <p>{activeChat.memberIds?.length
+            ? activeMlsStatus?.ready
+              ? <><strong>MLS end-to-end encryption active.</strong> RFC 9420 · epoch {activeMlsStatus.epoch} · {activeMlsStatus.verified ? "safety number verified" : "verification recommended"}.</>
+              : <><strong>Authenticated key exchange pending.</strong> Messaging unlocks when this device receives or creates an MLS session.</>
+            : <><strong>Encrypted private notes.</strong> The key stays in this browser.</>}</p>
         </div>
 
         <div className="message-space" ref={messageSpaceRef} onScroll={handleMessageScroll}>
@@ -1157,7 +1264,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         </div>
 
         <div className="composer-zone">
-          {awaitingKeyExchange && <div className="key-exchange-notice"><strong>Membership secured</strong><span>Messaging unlocks after the next milestone adds authenticated contact key exchange.</span></div>}
+          {awaitingKeyExchange && <div className="key-exchange-notice"><strong>Waiting for MLS keys</strong><span>{mlsError[activeChat.id] || "Ask your contact to open Whisper once so their authenticated device key can be published."}</span></div>}
           {showMediaPicker && (
             <div className="media-picker" aria-label="Emoji and GIF picker">
               <div className="picker-tabs">
@@ -1207,7 +1314,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               {draft.trim() ? "➤" : "♩"}
             </button>
           </form>
-          <p className="composer-hint">{draft.length >= MAX_MESSAGE_LENGTH * .8 ? `${draft.length.toLocaleString()} / ${MAX_MESSAGE_LENGTH.toLocaleString()} · ` : draft ? "Draft saved on this device · " : "Enter to send · "}<span>encrypted on this device</span></p>
+          <p className="composer-hint">{draft.length >= MAX_MESSAGE_LENGTH * .8 ? `${draft.length.toLocaleString()} / ${MAX_MESSAGE_LENGTH.toLocaleString()} · ` : draft ? "Draft saved on this device · " : "Enter to send · "}<span>{activeMlsStatus?.ready ? `MLS epoch ${activeMlsStatus.epoch}` : "encrypted on this device"}</span></p>
         </div>
       </section>
 
@@ -1224,9 +1331,14 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
             <button onClick={openChatSearch}><span>⌕</span>Search</button>
           </div>
           <div className="info-card">
-            <div><span>Encryption</span><strong>Device key active</strong></div>
-            <p>Messages are secured with keys stored on this device.</p>
-            <button onClick={() => flash("Cross-device safety verification is planned for the key-exchange milestone")}>About key verification</button>
+            <div><span>Encryption</span><strong>{activeMlsStatus?.ready ? `MLS epoch ${activeMlsStatus.epoch}` : "Device key active"}</strong></div>
+            <p>{activeMlsStatus?.ready ? "RFC 9420 MLS provides forward secrecy and epoch-based key rotation. Verify the safety number with your contact over another channel." : "Private-note keys are stored only in this browser."}</p>
+            {safetyNumber && <div className="safety-number" aria-label="Conversation safety number">{safetyNumber}</div>}
+            {activeMlsStatus?.ready && <div className="security-actions">
+              <button onClick={() => void navigator.clipboard.writeText(safetyNumber ?? "").then(() => flash("Safety number copied"))} disabled={!safetyNumber}>Copy number</button>
+              <button onClick={() => void verifySafetyNumber()} disabled={!safetyNumber || activeMlsStatus.verified}>{activeMlsStatus.verified ? "Verified" : "Mark verified"}</button>
+              <button onClick={() => void rotateConversationKeys()} disabled={rotatingKeys}>{rotatingKeys ? "Rotating…" : "Rotate keys"}</button>
+            </div>}
           </div>
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
           <button className="archive-chat-action export-chat-action" onClick={exportConversation}>Export conversation</button>

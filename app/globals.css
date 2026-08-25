@@ -353,6 +353,9 @@ button.reply-quote:hover { background: rgba(15,124,102,.12); color: var(--green-
 .info-card div strong { color: var(--green); }
 .info-card p { color: #818b87; font-size: 10px; line-height: 1.5; }
 .info-card button, .media-row button { padding: 0; border: 0; background: transparent; color: var(--green); font-size: 10px; font-weight: 700; cursor: pointer; }
+.safety-number { display: block !important; margin: 10px 0; padding: 10px; border: 1px dashed #a9c8bd; border-radius: 9px; background: #fff; color: #42544d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px !important; line-height: 1.65; overflow-wrap: anywhere; }
+.security-actions { display: flex !important; flex-wrap: wrap; justify-content: flex-start !important; gap: 12px; }
+.security-actions button:disabled { color: var(--muted); cursor: default; }
 .media-row { display: flex; justify-content: space-between; margin: 26px 0 10px; font-size: 12px; }
 .media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
 .media-grid span { display: grid; aspect-ratio: 1; place-items: end start; padding: 7px; border-radius: 9px; background: linear-gradient(145deg, #dfece6, #bdcec6); color: #fff; font-size: 9px; font-weight: 700; }
@@ -440,6 +443,7 @@ button.person-row:hover { border-color: #aacfc3; background: #f5faf8; }
 .theme-dark .conversation:hover, .theme-dark .icon-button:hover { background: #22332d; }
 .theme-dark .conversation.active { background: #1c3b32; }
 .theme-dark .search-wrap, .theme-dark .chat-search-field, .theme-dark .composer, .theme-dark .info-card, .theme-dark .new-chat-modal input, .theme-dark .profile-form, .theme-dark .person-row, .theme-dark .report-modal select, .theme-dark .report-modal textarea { border-color: #354840; background: #202f2a; }
+.theme-dark .safety-number { border-color: #45665a; background: #17251f; color: #d9e8e2; }
 .theme-dark .bubble, .theme-dark .quick-actions button, .theme-dark .archive-chat-action, .theme-dark .message-action-menu, .theme-dark .reaction-picker { background: #22322c; }
 .theme-dark .mine .bubble { background: #19483a; }
 .theme-dark .bubble p, .theme-dark .chat-search-results strong, .theme-dark .new-chat-modal label { color: #e2ebe8; }

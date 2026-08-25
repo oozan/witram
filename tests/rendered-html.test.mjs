@@ -106,7 +106,42 @@ test("enforces authenticated accounts, contacts, membership, blocks, and reports
   assert.match(migration, /CREATE TABLE `contact_invitations`/);
   assert.match(client, /Contact invitation sent/);
   assert.match(client, /Report submitted for review/);
-  assert.match(client, /Secure contact key exchange is required before messaging/);
+  assert.match(client, /Authenticated key exchange pending/);
+});
+
+test("uses authenticated RFC 9420 MLS sessions for multi-account chats", async () => {
+  const [mls, keys, welcomes, events, messages, schema, migration, security, manifest] = await Promise.all([
+    readFile(new URL("../app/mls-crypto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/keys/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mls/welcomes/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mls/events/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0002_safe_lilandra.sql", import.meta.url), "utf8"),
+    readFile(new URL("../SECURITY.md", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(manifest, /"ts-mls": "1\.6\.2"/);
+  assert.match(mls, /createGroup/);
+  assert.match(mls, /joinGroup/);
+  assert.match(mls, /createApplicationMessage/);
+  assert.match(mls, /processPrivateMessage/);
+  assert.match(mls, /verifyKeyPackage/);
+  assert.match(mls, /false, \["sign"\]/);
+  assert.match(mls, /zeroOutUint8Array/);
+  assert.match(mls, /whisper-safety-v1/);
+  assert.match(keys, /Device identity signature is invalid/);
+  assert.match(keys, /key package versions cannot be rolled back/i);
+  assert.match(welcomes, /key package has already been consumed/i);
+  assert.match(events, /kind !== "commit"/);
+  assert.match(messages, /Multi-account conversations require MLS encryption/);
+  assert.match(schema, /export const devices/);
+  assert.match(schema, /export const mlsWelcomes/);
+  assert.match(schema, /export const mlsEvents/);
+  assert.match(migration, /idx_mls_welcomes_key_package_once/);
+  assert.match(security, /not formally audited/i);
+  assert.doesNotMatch(security, /is formally audited/i);
 });
 
 test("stores reply context inside encrypted message content", async () => {

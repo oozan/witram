@@ -46,10 +46,24 @@ export async function initializeDatabase() {
       email TEXT,
       display_name TEXT,
       public_key TEXT,
+      identity_public_key TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)"),
+    db.prepare(`CREATE TABLE IF NOT EXISTS devices (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      identity_public_key TEXT NOT NULL,
+      identity_signature TEXT NOT NULL,
+      key_package TEXT NOT NULL,
+      key_package_signature TEXT NOT NULL,
+      key_package_version TEXT NOT NULL DEFAULT '1',
+      active TEXT NOT NULL DEFAULT '1',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -71,6 +85,30 @@ export async function initializeDatabase() {
       ciphertext TEXT NOT NULL,
       iv TEXT NOT NULL,
       algorithm TEXT NOT NULL DEFAULT 'AES-GCM-256',
+      protocol TEXT NOT NULL DEFAULT 'legacy-aes-gcm',
+      epoch TEXT,
+      sender_device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS mls_welcomes (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      recipient_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      recipient_key_package_version TEXT NOT NULL,
+      sender_device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      welcome TEXT NOT NULL,
+      ratchet_tree TEXT NOT NULL,
+      claimed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS mls_events (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      sender_device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      epoch TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS contact_invitations (
@@ -105,6 +143,10 @@ export async function initializeDatabase() {
     )`),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_devices_user_active ON devices(user_id, active)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_mls_welcomes_recipient_claimed ON mls_welcomes(recipient_device_id, claimed_at)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_mls_welcomes_key_package_once ON mls_welcomes(recipient_device_id, recipient_key_package_version)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_mls_events_conversation_created ON mls_events(conversation_id, created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_contact_invitations_recipient_status ON contact_invitations(recipient_id, status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_contact_invitations_sender_status ON contact_invitations(sender_id, status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_contacts_contact_id ON contacts(contact_id)"),
