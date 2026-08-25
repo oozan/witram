@@ -51,13 +51,17 @@ export async function POST(request: Request) {
   if (!await db.prepare("SELECT 1 FROM devices WHERE id = ? AND user_id = ? AND active = '1' LIMIT 1").bind(senderDeviceId, current.userId).first()) return json({ error: "Sender device is not active" }, { status: 403 });
   const recipientDevice = await db.prepare("SELECT key_package_version FROM devices WHERE id = ? AND user_id = ? AND active = '1' LIMIT 1").bind(recipientDeviceId, recipientUserId).first<{ key_package_version: string }>();
   if (!recipientDevice) return json({ error: "Recipient device is not active" }, { status: 403 });
-  if (Number(recipientDevice.key_package_version) !== recipientKeyPackageVersion) return json({ error: "Recipient key package has already rotated" }, { status: 409 });
+  const pooledPackage = await db.prepare("SELECT 1 FROM device_key_packages WHERE device_id = ? AND version = ? AND consumed_at IS NULL LIMIT 1").bind(recipientDeviceId, String(recipientKeyPackageVersion)).first();
+  if (!pooledPackage && Number(recipientDevice.key_package_version) !== recipientKeyPackageVersion) return json({ error: "Recipient key package is unavailable or already consumed" }, { status: 409 });
   if (await db.prepare("SELECT 1 FROM mls_welcomes WHERE recipient_device_id = ? AND recipient_key_package_version = ? LIMIT 1").bind(recipientDeviceId, String(recipientKeyPackageVersion)).first()) return json({ error: "Recipient key package has already been consumed" }, { status: 409 });
 
   const id = crypto.randomUUID();
-  await db.prepare(
-    "INSERT INTO mls_welcomes (id, conversation_id, recipient_user_id, recipient_device_id, recipient_key_package_version, sender_device_id, welcome, ratchet_tree) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  ).bind(id, conversationId, recipientUserId, recipientDeviceId, String(recipientKeyPackageVersion), senderDeviceId, payload.welcome, payload.ratchetTree).run();
+  await db.batch([
+    db.prepare(
+      "INSERT INTO mls_welcomes (id, conversation_id, recipient_user_id, recipient_device_id, recipient_key_package_version, sender_device_id, welcome, ratchet_tree) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).bind(id, conversationId, recipientUserId, recipientDeviceId, String(recipientKeyPackageVersion), senderDeviceId, payload.welcome, payload.ratchetTree),
+    db.prepare("UPDATE device_key_packages SET consumed_at = ? WHERE device_id = ? AND version = ? AND consumed_at IS NULL").bind(new Date().toISOString(), recipientDeviceId, String(recipientKeyPackageVersion)),
+  ]);
   return json({ welcome: { id } }, { status: 201 });
 }
 

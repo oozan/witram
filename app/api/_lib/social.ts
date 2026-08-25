@@ -70,6 +70,39 @@ export async function initializeDatabase() {
       kind TEXT NOT NULL DEFAULT 'direct',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS device_key_packages (
+      device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      key_package TEXT NOT NULL,
+      key_package_signature TEXT NOT NULL,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (device_id, version)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS device_link_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code_hash TEXT NOT NULL,
+      requester_name TEXT NOT NULL,
+      requester_public_key TEXT NOT NULL,
+      approver_public_key TEXT,
+      encrypted_transfer TEXT,
+      transfer_iv TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS encrypted_backups (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      source_device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+      ciphertext TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      version TEXT NOT NULL DEFAULT '1',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS conversation_members (
       conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -144,6 +177,9 @@ export async function initializeDatabase() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_devices_user_active ON devices(user_id, active)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_device_key_packages_available ON device_key_packages(device_id, consumed_at)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_device_link_sessions_code_hash ON device_link_sessions(code_hash)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_device_link_sessions_user_status ON device_link_sessions(user_id, status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_mls_welcomes_recipient_claimed ON mls_welcomes(recipient_device_id, claimed_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_mls_welcomes_key_package_once ON mls_welcomes(recipient_device_id, recipient_key_package_version)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_mls_events_conversation_created ON mls_events(conversation_id, created_at)"),

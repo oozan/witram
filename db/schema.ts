@@ -36,6 +36,55 @@ export const devices = sqliteTable(
   (table) => [index("idx_devices_user_active").on(table.userId, table.active)],
 );
 
+export const deviceKeyPackages = sqliteTable(
+  "device_key_packages",
+  {
+    deviceId: text("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+    version: text("version").notNull(),
+    keyPackage: text("key_package").notNull(),
+    keyPackageSignature: text("key_package_signature").notNull(),
+    consumedAt: text("consumed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.deviceId, table.version] }),
+    index("idx_device_key_packages_available").on(table.deviceId, table.consumedAt),
+  ],
+);
+
+export const deviceLinkSessions = sqliteTable(
+  "device_link_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    requesterName: text("requester_name").notNull(),
+    requesterPublicKey: text("requester_public_key").notNull(),
+    approverPublicKey: text("approver_public_key"),
+    encryptedTransfer: text("encrypted_transfer"),
+    transferIv: text("transfer_iv"),
+    status: text("status", { enum: ["pending", "confirming", "ready", "claimed", "cancelled"] }).notNull().default("pending"),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("idx_device_link_sessions_code_hash").on(table.codeHash),
+    index("idx_device_link_sessions_user_status").on(table.userId, table.status),
+  ],
+);
+
+export const encryptedBackups = sqliteTable("encrypted_backups", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  sourceDeviceId: text("source_device_id").references(() => devices.id, { onDelete: "set null" }),
+  ciphertext: text("ciphertext").notNull(),
+  iv: text("iv").notNull(),
+  salt: text("salt").notNull(),
+  version: text("version").notNull().default("1"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const conversationMembers = sqliteTable(
   "conversation_members",
   {
