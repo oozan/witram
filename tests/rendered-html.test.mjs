@@ -144,6 +144,72 @@ test("uses authenticated RFC 9420 MLS sessions for multi-account chats", async (
   assert.doesNotMatch(security, /is formally audited/i);
 });
 
+test("implements encrypted multi-device linking, revocation, and recovery backups", async () => {
+  const [cryptoClient, links, backups, keys, welcomes, schema, migration, client, security] = await Promise.all([
+    readFile(new URL("../app/mls-crypto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/devices/links/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/backups/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/keys/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mls/welcomes/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0003_young_the_captain.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../SECURITY.md", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(cryptoClient, /name: "X25519"/);
+  assert.match(cryptoClient, /whisper-device-link-v1/);
+  assert.match(cryptoClient, /whisper-encrypted-backup-v1/);
+  assert.match(cryptoClient, /additionalData/);
+  assert.match(cryptoClient, /provisionDeviceToConversations/);
+  assert.match(cryptoClient, /proposalType: "remove"/);
+  assert.match(cryptoClient, /whisper-device-revoke-v1/);
+  assert.match(links, /10 \* 60_000/);
+  assert.match(links, /codeHash/);
+  assert.doesNotMatch(links, /requesterPrivateKey|recoveryCode/);
+  assert.match(backups, /encrypted_backups/);
+  assert.doesNotMatch(backups, /userIdentityPrivateKey|message\.content|plaintext/);
+  assert.match(keys, /identityRotationSignature/);
+  assert.match(keys, /Device revocation signature is invalid/);
+  assert.match(keys, /device_key_packages/);
+  assert.match(welcomes, /consumed_at IS NULL/);
+  assert.match(schema, /deviceLinkSessions/);
+  assert.match(schema, /encryptedBackups/);
+  assert.match(migration, /CREATE TABLE `device_link_sessions`/);
+  assert.match(migration, /CREATE TABLE `encrypted_backups`/);
+  assert.match(client, /Codes match — transfer keys/);
+  assert.match(client, /Store this key offline/);
+  assert.match(security, /does not clone live MLS session state/i);
+});
+
+test("round-trips the device-link X25519 and authenticated-encryption primitives", async () => {
+  const [first, second] = await Promise.all([
+    crypto.subtle.generateKey({ name: "X25519" }, false, ["deriveBits"]),
+    crypto.subtle.generateKey({ name: "X25519" }, false, ["deriveBits"]),
+  ]);
+  const [firstPublic, secondPublic] = await Promise.all([
+    crypto.subtle.exportKey("raw", first.publicKey),
+    crypto.subtle.exportKey("raw", second.publicKey),
+  ]);
+  const [firstPeer, secondPeer] = await Promise.all([
+    crypto.subtle.importKey("raw", secondPublic, { name: "X25519" }, false, []),
+    crypto.subtle.importKey("raw", firstPublic, { name: "X25519" }, false, []),
+  ]);
+  const [firstShared, secondShared] = await Promise.all([
+    crypto.subtle.deriveBits({ name: "X25519", public: firstPeer }, first.privateKey, 256),
+    crypto.subtle.deriveBits({ name: "X25519", public: secondPeer }, second.privateKey, 256),
+  ]);
+  assert.deepEqual(new Uint8Array(firstShared), new Uint8Array(secondShared));
+  const material = await crypto.subtle.importKey("raw", firstShared, "HKDF", false, ["deriveKey"]);
+  const salt = crypto.getRandomValues(new Uint8Array(24));
+  const key = await crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt, info: new TextEncoder().encode("whisper-device-link-v1") }, material, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const aad = new TextEncoder().encode("link-id");
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad }, key, new TextEncoder().encode("account-key"));
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: aad }, key, ciphertext);
+  assert.equal(new TextDecoder().decode(plaintext), "account-key");
+});
+
 test("stores reply context inside encrypted message content", async () => {
   const [client, route] = await Promise.all([
     readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),

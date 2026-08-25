@@ -2,9 +2,9 @@
 
 Whisper is a responsive Telegram-inspired chat application with client-side encryption and durable ciphertext storage.
 
-## 0.5 milestone
+## 0.6 milestone
 
-The 0.5 release replaces the direct-chat placeholder with an RFC 9420 Messaging Layer Security (MLS) flow. Accounts publish signed per-device key packages, conversation creators deliver MLS Welcome messages, recipients advance through authenticated epochs, and people can compare a stable safety number out of band. Saved Messages retain the original device-local AES-GCM vault.
+The 0.6 release adds a multi-device lifecycle around the RFC 9420 MLS foundation: authenticated browser linking, end-to-end encrypted account-key transfer, one-time key-package pools, explicit MLS chat provisioning, signed device removal, recovery-key backups, and lost-device replacement. Saved Messages retain the original device-local AES-GCM vault.
 
 ## What works
 
@@ -46,6 +46,14 @@ The 0.5 release replaces the direct-chat placeholder with an RFC 9420 Messaging 
 - Signed, versioned, single-use MLS key packages and server-stored opaque Welcome messages
 - Forward secrecy through the MLS secret tree and user-triggered epoch rotation
 - Stable safety numbers with device-local verified state
+- Ten-minute, high-entropy device-link capabilities with ephemeral X25519 exchange
+- A six-group authentication code that users compare before account keys transfer
+- AES-GCM encrypted identity transfer with link-specific authenticated data
+- Multiple one-time MLS key packages per device for adding a device to several chats
+- Explicit “Sync chats” provisioning that adds a linked device as its own MLS member
+- Account-signed device revocation plus MLS removal commits and epoch rotation
+- Server-persisted encrypted recovery backups protected by a 256-bit offline key
+- Lost-device replacement that restores account identity and encrypted cached history, then revokes old devices
 - Non-exportable Web Crypto identity private keys in IndexedDB
 - AES-256-GCM encryption for Saved Messages in the browser before network transmission
 - Non-exportable conversation keys stored in IndexedDB on the device
@@ -85,7 +93,7 @@ The test command creates the production build and verifies the rendered product 
 
 Direct-chat bodies are encrypted by `ts-mls` 1.6 using the RFC 9420 ciphersuite `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519`. The server validates account membership and signed device bundles but stores only MLS ciphertext, public commits, Welcome payloads, and routing metadata. Saved Messages continue to use AES-256-GCM with a non-exportable browser key.
 
-This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates a standardized protocol; that is not the same as an audited product. A second browser for an existing account is deliberately rejected until a secure account-key transfer/linking ceremony exists. Encrypted media, group membership changes, secure account recovery, push notifications, XSS hardening review, abuse operations, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
+This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates a standardized protocol; that is not the same as an audited product. Multi-device linking, removal, and recovery are now implemented, but recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. Encrypted media, general group membership UI, push notifications, XSS hardening review, abuse operations, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
 
 ## Project shape
 
@@ -94,6 +102,8 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `app/mls-crypto.ts` — browser MLS state, key packages, epochs, and safety numbers
 - `app/api/keys/route.ts` — authenticated account/device identity directory
 - `app/api/mls/` — opaque MLS Welcome and public-commit transport
+- `app/api/devices/links/route.ts` — expiring encrypted device-link rendezvous
+- `app/api/backups/route.ts` — ciphertext-only recovery backup storage
 - `app/api/conversations/route.ts` — durable user-owned conversation API
 - `app/api/messages/route.ts` — membership-protected ciphertext-only message API
 - `app/api/account/route.ts` — profile registration and updates
