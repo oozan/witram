@@ -77,9 +77,12 @@ export async function purgeExpiredAttachments(limit = 25) {
   const db = database();
   const result = await db.prepare(
     `SELECT * FROM attachments
-     WHERE status != 'deleted' AND expires_at IS NOT NULL AND expires_at <= ?
-     ORDER BY expires_at ASC LIMIT ?`,
-  ).bind(new Date().toISOString(), limit).all() as D1Result<AttachmentRow>;
+     WHERE status != 'deleted' AND (
+       (expires_at IS NOT NULL AND expires_at <= ?)
+       OR (status = 'pending' AND created_at <= ?)
+     )
+     ORDER BY COALESCE(expires_at, created_at) ASC LIMIT ?`,
+  ).bind(new Date().toISOString(), new Date(Date.now() - 3_600_000).toISOString(), limit).all() as D1Result<AttachmentRow>;
   const rows = result.results ?? [];
   if (!rows.length) return 0;
 

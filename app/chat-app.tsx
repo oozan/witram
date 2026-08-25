@@ -1,8 +1,21 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element, jsx-a11y/media-has-caption -- decrypted object URLs cannot use the image optimizer, and private user media has no server-side caption track */
+
 import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { decryptMessage, encryptMessage } from "./client-crypto";
+import {
+  bytesToBase64,
+  createEncryptedThumbnail,
+  createMediaKey,
+  decryptMediaBlob,
+  encryptMediaBlob,
+  isAttachmentDescriptor,
+  validateMediaFile,
+  type AttachmentDescriptor,
+  type MediaRetention,
+} from "./media-crypto";
 import {
   cacheSentMlsMessage,
   acceptDeviceLinkCode,
@@ -41,6 +54,7 @@ type Message = {
   reactions?: string[];
   edited?: boolean;
   deleted?: boolean;
+  attachment?: AttachmentDescriptor;
 };
 
 type OnlineGif = {
@@ -54,7 +68,7 @@ type OnlineGif = {
 };
 
 type DecodedStoredContent =
-  | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string; replyTo?: string; replyToId?: string }
+  | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string; replyTo?: string; replyToId?: string; attachment?: AttachmentDescriptor }
   | { recordType: "reaction"; targetId: string; emoji: string; active: boolean }
   | { recordType: "edit"; targetId: string; text: string }
   | { recordType: "delete"; targetId: string };
@@ -137,6 +151,14 @@ function withChatPreferences(chat: Chat): Chat {
 }
 
 function decodeStoredMessage(value: string): DecodedStoredContent {
+  if (value.startsWith("[attachment]")) {
+    try {
+      const attachment = JSON.parse(value.slice(12)) as unknown;
+      if (isAttachmentDescriptor(attachment)) return { recordType: "message", text: attachment.name, attachment };
+    } catch {
+      return { recordType: "message", text: "Encrypted attachment" };
+    }
+  }
   if (value.startsWith("[edit]")) {
     try {
       const data = JSON.parse(value.slice(6)) as { targetId?: unknown; text?: unknown };
@@ -198,6 +220,76 @@ function MessageText({ text }: { text: string }) {
     : part)}</p>;
 }
 
+function EncryptedAttachment({ attachment }: { attachment: AttachmentDescriptor }) {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!attachment.thumbnailIv || !attachment.thumbnailMime) return;
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    fetch(`/api/attachments/${encodeURIComponent(attachment.id)}?part=thumbnail`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(response.status === 410 ? "Media expired" : "Preview unavailable");
+        const blob = await decryptMediaBlob(await response.arrayBuffer(), attachment.key, attachment.thumbnailIv!, attachment.thumbnailMime!);
+        objectUrl = URL.createObjectURL(blob);
+        setThumbnailUrl(objectUrl);
+      })
+      .catch((cause) => { if ((cause as Error).name !== "AbortError") setError(cause instanceof Error ? cause.message : "Preview unavailable"); });
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [attachment.id, attachment.key, attachment.thumbnailIv, attachment.thumbnailMime]);
+
+  useEffect(() => () => { if (mediaUrl) URL.revokeObjectURL(mediaUrl); }, [mediaUrl]);
+
+  async function loadOriginal() {
+    if (mediaUrl) return mediaUrl;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/attachments/${encodeURIComponent(attachment.id)}?part=original`);
+      if (!response.ok) throw new Error(response.status === 410 ? "This media has expired" : "Encrypted media is unavailable");
+      const blob = await decryptMediaBlob(await response.arrayBuffer(), attachment.key, attachment.iv, attachment.mime);
+      const url = URL.createObjectURL(blob);
+      setMediaUrl(url);
+      return url;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Media could not be decrypted");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function downloadFile() {
+    const url = await loadOriginal();
+    if (!url) return;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = attachment.name;
+    link.click();
+  }
+
+  const size = attachment.size >= 1024 * 1024 ? `${(attachment.size / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(attachment.size / 1024)} KB`;
+  const expiry = attachment.expiresAt ? `deletes ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(attachment.expiresAt))}` : "kept until deleted";
+  return <div className={`encrypted-attachment attachment-${attachment.kind}`}>
+    {attachment.kind === "image" || attachment.kind === "gif" ? mediaUrl
+      ? <img src={mediaUrl} alt={attachment.name} />
+      : <button className="encrypted-media-preview" onClick={() => void loadOriginal()} disabled={loading}>{thumbnailUrl && <img src={thumbnailUrl} alt="Encrypted preview" />}<span>{loading ? "Decrypting…" : `View ${attachment.kind}`}</span></button>
+      : attachment.kind === "video" ? mediaUrl
+        ? <video src={mediaUrl} poster={thumbnailUrl ?? undefined} controls playsInline />
+        : <button className="encrypted-media-preview" onClick={() => void loadOriginal()} disabled={loading}>{thumbnailUrl && <img src={thumbnailUrl} alt="Encrypted video preview" />}<span>{loading ? "Decrypting…" : "Play video"}</span></button>
+        : attachment.kind === "audio" ? mediaUrl
+          ? <audio src={mediaUrl} controls />
+          : <button className="encrypted-audio-load" onClick={() => void loadOriginal()} disabled={loading}><span>◉</span>{loading ? "Decrypting audio…" : "Play encrypted audio"}</button>
+          : <button className="encrypted-file-download" onClick={() => void downloadFile()} disabled={loading}><span>⇩</span><strong>{attachment.name}</strong><small>{loading ? "Decrypting…" : "Download and decrypt"}</small></button>}
+    {attachment.kind !== "file" && <strong className="attachment-name">{attachment.name}</strong>}
+    <small className="attachment-security">⌁ AES-256-GCM · {size} · {expiry}</small>
+    {error && <span className="attachment-error">{error}</span>}
+  </div>;
+}
+
 export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [chats, setChats] = useState(initialChats);
   const [activeId, setActiveId] = useState("saved");
@@ -205,6 +297,10 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [conversationFilter, setConversationFilter] = useState<"all" | "unread" | "groups" | "saved" | "archived">("all");
   const [draft, setDraft] = useState("");
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [mediaRetention, setMediaRetention] = useState<MediaRetention>("7d");
+  const [mediaUploadState, setMediaUploadState] = useState<string | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [pickerTab, setPickerTab] = useState<"emoji" | "gif">("emoji");
   const [emojiGroup, setEmojiGroup] = useState("Smileys");
   const [gifQuery, setGifQuery] = useState("");
@@ -257,6 +353,12 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const messageSpaceRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef(new Map<string, HTMLDivElement>());
   const userAwayFromBottomRef = useRef(false);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
+  const recordingSecondsRef = useRef(0);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const activeMlsStatus = mlsStatuses[activeChat.id];
@@ -283,6 +385,13 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       .catch((error) => { if (!cancelled) setMlsError((current) => ({ ...current, device: error instanceof Error ? error.message : "Device key initialization failed" })); });
     return () => { cancelled = true; };
   }, [currentUser]);
+
+  useEffect(() => () => {
+    if (recordingTimerRef.current !== null) window.clearInterval(recordingTimerRef.current);
+    if (mediaRecorderRef.current) mediaRecorderRef.current.onstop = null;
+    mediaRecorderRef.current?.stop();
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
   useEffect(() => {
     const peerId = activeChat.memberIds?.[0];
@@ -542,6 +651,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               gifPreviewUrl: record.content.gifPreviewUrl,
               replyTo: record.content.replyTo,
               replyToId: record.content.replyToId,
+              attachment: record.content.attachment,
               time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(record.createdAt)),
               mine: record.mine,
               status: record.mine ? "read" : undefined,
@@ -557,7 +667,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
                 return message.deleted ? message : { ...message, text: control.text, edited: true };
               }
               if (control.recordType === "delete") {
-                return { ...message, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, replyToId: undefined, reactions: [], deleted: true };
+                return { ...message, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, attachment: undefined, replyTo: undefined, replyToId: undefined, reactions: [], deleted: true };
               }
               const reactions = message.reactions ?? [];
               return {
@@ -632,23 +742,29 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     window.setTimeout(() => setHighlightedMessageId((current) => current === messageId ? null : current), 1800);
   }
 
+  async function ensurePersistedChat(chat: Chat) {
+    if (chat.persisted) return chat;
+    const createResponse = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: chat.name, kind: chat.kind ?? "direct", memberIds: chat.memberIds ?? [] }),
+    });
+    const created = await createResponse.json() as { conversation?: { id: string }; error?: string };
+    if (!createResponse.ok || !created.conversation) throw new Error(created.error ?? "Conversation creation failed");
+    const secureChat = { ...chat, id: created.conversation.id, persisted: true };
+    setActiveId(secureChat.id);
+    setChats((current) => current.map((item) => item.id === chat.id ? { ...item, id: secureChat.id, persisted: true } : item));
+    return secureChat;
+  }
+
   async function persistEncryptedMessage(chat: Chat, message: Message) {
     let secureChat = chat;
     try {
-      if (!chat.persisted) {
-        const createResponse = await fetch("/api/conversations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title: chat.name, kind: chat.kind ?? "direct", memberIds: chat.memberIds ?? [] }),
-        });
-        const created = await createResponse.json() as { conversation?: { id: string }; error?: string };
-        if (!createResponse.ok || !created.conversation) throw new Error(created.error ?? "Conversation creation failed");
-        secureChat = { ...chat, id: created.conversation.id, persisted: true };
-        setActiveId(secureChat.id);
-        setChats((current) => current.map((item) => item.id === chat.id ? { ...item, id: secureChat.id, persisted: true } : item));
-      }
+      secureChat = await ensurePersistedChat(chat);
 
-      const storedContent = message.gifUrl
+      const storedContent = message.attachment
+        ? `[attachment]${JSON.stringify(message.attachment)}`
+        : message.gifUrl
         ? `[online-gif]${JSON.stringify({ id: message.gif?.replace(/^tenor-/, ""), label: message.text, url: message.gifUrl, previewUrl: message.gifPreviewUrl ?? message.gifUrl })}`
         : message.gif ? `[gif:${message.gif}] ${message.text}`
           : message.replyTo ? `[message]${JSON.stringify({ text: message.text, replyTo: message.replyTo, replyToId: message.replyToId })}`
@@ -1051,6 +1167,141 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     void persistEncryptedMessage(activeChat, message);
   }
 
+  async function uploadEncryptedMedia(file: File, duration?: number) {
+    if (mediaUploadState) return;
+    if (awaitingKeyExchange) {
+      flash("Secure key exchange is required before sharing media");
+      return;
+    }
+    let reservedId: string | null = null;
+    try {
+      setShowAttachmentMenu(false);
+      setMediaUploadState("Validating file…");
+      const kind = await validateMediaFile(file);
+      const secureChat = await ensurePersistedChat(activeChat);
+      const key = createMediaKey();
+      setMediaUploadState("Creating encrypted preview…");
+      const thumbnail = await createEncryptedThumbnail(file, kind, key);
+      setMediaUploadState("Encrypting on this device…");
+      const original = await encryptMediaBlob(file, key);
+
+      const reserveResponse = await fetch("/api/attachments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: secureChat.id,
+          kind,
+          plaintextSize: file.size,
+          ciphertextSize: original.ciphertext.size,
+          thumbnailCiphertextSize: thumbnail?.ciphertext.size ?? null,
+          retention: mediaRetention,
+        }),
+      });
+      const reserved = await reserveResponse.json() as { attachment?: { id: string; expiresAt: string | null }; error?: string };
+      if (!reserveResponse.ok || !reserved.attachment) throw new Error(reserved.error ?? "Encrypted upload could not be reserved");
+      reservedId = reserved.attachment.id;
+
+      setMediaUploadState("Uploading encrypted media…");
+      const uploadPart = async (part: "original" | "thumbnail", ciphertext: Blob) => {
+        const response = await fetch(`/api/attachments/${reservedId}?part=${part}`, { method: "PUT", body: ciphertext });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({})) as { error?: string };
+          throw new Error(payload.error ?? `Encrypted ${part} upload failed`);
+        }
+      };
+      await uploadPart("original", original.ciphertext);
+      if (thumbnail) await uploadPart("thumbnail", thumbnail.ciphertext);
+      const finalizeResponse = await fetch("/api/attachments", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: reservedId }),
+      });
+      if (!finalizeResponse.ok) {
+        const payload = await finalizeResponse.json().catch(() => ({})) as { error?: string };
+        throw new Error(payload.error ?? "Encrypted upload could not be finalized");
+      }
+
+      const descriptor: AttachmentDescriptor = {
+        version: 1,
+        id: reservedId,
+        kind,
+        name: Array.from(file.name).filter((character) => character.charCodeAt(0) >= 32).join("").slice(0, 140) || `${kind}-${reservedId.slice(0, 8)}`,
+        mime: file.type,
+        size: file.size,
+        key: bytesToBase64(key),
+        iv: bytesToBase64(original.iv),
+        thumbnailIv: thumbnail ? bytesToBase64(thumbnail.iv) : undefined,
+        thumbnailMime: thumbnail?.mime,
+        retention: mediaRetention,
+        expiresAt: reserved.attachment.expiresAt,
+        duration,
+      };
+      const message: Message = {
+        id: `local-${crypto.randomUUID()}`,
+        text: descriptor.name,
+        attachment: descriptor,
+        time: formatTime(),
+        mine: true,
+        status: "sent",
+      };
+      setChats((current) => current.map((chat) => chat.id === secureChat.id || chat.id === activeChat.id
+        ? { ...chat, preview: `${kind === "audio" ? "Voice" : kind.toUpperCase()} · ${descriptor.name}`, time: message.time, messages: [...chat.messages, message] }
+        : chat));
+      await persistEncryptedMessage(secureChat, message);
+      flash(`${kind === "audio" ? "Voice message" : "Media"} encrypted and sent`);
+    } catch (cause) {
+      if (reservedId) void fetch(`/api/attachments/${reservedId}`, { method: "DELETE" });
+      flash(cause instanceof Error ? cause.message : "Media could not be encrypted and uploaded");
+    } finally {
+      setMediaUploadState(null);
+      if (mediaInputRef.current) mediaInputRef.current.value = "";
+    }
+  }
+
+  async function toggleVoiceRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state === "recording") {
+      recorder.stop();
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      flash("Voice recording is not supported by this browser");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      const candidates = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"];
+      const recordingMime = candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+      const nextRecorder = new MediaRecorder(stream, recordingMime ? { mimeType: recordingMime } : undefined);
+      mediaStreamRef.current = stream;
+      mediaChunksRef.current = [];
+      recordingSecondsRef.current = 0;
+      setRecordingSeconds(0);
+      nextRecorder.ondataavailable = (event) => { if (event.data.size) mediaChunksRef.current.push(event.data); };
+      nextRecorder.onstop = () => {
+        const baseMime = nextRecorder.mimeType.split(";")[0] || "audio/webm";
+        const extension = baseMime === "audio/mp4" ? "m4a" : "webm";
+        const voiceFile = new File(mediaChunksRef.current, `Voice message.${extension}`, { type: baseMime });
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        if (recordingTimerRef.current !== null) window.clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        setRecordingSeconds(0);
+        if (voiceFile.size) void uploadEncryptedMedia(voiceFile, recordingSecondsRef.current);
+      };
+      mediaRecorderRef.current = nextRecorder;
+      nextRecorder.start(500);
+      recordingTimerRef.current = window.setInterval(() => {
+        recordingSecondsRef.current += 1;
+        setRecordingSeconds(recordingSecondsRef.current);
+        if (recordingSecondsRef.current >= 300 && nextRecorder.state === "recording") nextRecorder.stop();
+      }, 1000);
+    } catch (cause) {
+      flash(cause instanceof DOMException && cause.name === "NotAllowedError" ? "Microphone permission was denied" : "Voice recording could not start");
+    }
+  }
+
   async function persistEncryptedControl(chat: Chat, content: string) {
     const localId = `control-${crypto.randomUUID()}`;
     const usesMls = Boolean(chat.memberIds?.length);
@@ -1137,7 +1388,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
       ...chat,
       messages: chat.messages.map((entry) => entry.id === message.id
-        ? { ...entry, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, replyToId: undefined, reactions: [], deleted: true }
+        ? { ...entry, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, attachment: undefined, replyTo: undefined, replyToId: undefined, reactions: [], deleted: true }
         : entry),
     } : chat));
     void persistEncryptedControl(activeChat, `[delete]${JSON.stringify({ targetId: message.id })}`).catch(() => {
@@ -1147,6 +1398,11 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       } : chat));
       flash("Message deletion could not be synced securely");
     });
+    if (message.mine && message.attachment) {
+      void fetch(`/api/attachments/${encodeURIComponent(message.attachment.id)}`, { method: "DELETE" }).then((response) => {
+        if (!response.ok) flash("Message was deleted, but its retained media could not be removed yet");
+      });
+    }
   }
 
   async function copyMessage(message: Message) {
@@ -1381,7 +1637,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
                   {message.replyTo && (message.replyToId
                     ? <button className="reply-quote" onClick={() => focusMessage(message.replyToId!)} aria-label="Jump to replied message">{message.replyTo}</button>
                     : <div className="reply-quote">{message.replyTo}</div>)}
-                  {message.gifUrl ? (
+                  {message.attachment ? <EncryptedAttachment attachment={message.attachment} /> : message.gifUrl ? (
                     <div className="online-gif-message">
                       <Image src={message.gifUrl} alt={message.text} width={640} height={480} unoptimized />
                       <span className="online-gif-label">{message.text}</span>
@@ -1408,7 +1664,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
                         <button onClick={() => void copyMessage(message)}>Copy message</button>
                         <button onClick={() => togglePinnedMessage(message)}>{pinnedMessageId === String(message.id) ? "Unpin message" : "Pin message"}</button>
                         {message.mine && activeChat.persisted && typeof message.id === "string" && !message.id.startsWith("local-") && <>
-                          {!message.gif && !message.gifUrl && <button onClick={() => startEditingMessage(message)}>Edit message</button>}
+                          {!message.gif && !message.gifUrl && !message.attachment && <button onClick={() => startEditingMessage(message)}>Edit message</button>}
                           <button className="danger" onClick={() => { setDeleteTarget(message); setMessageMenuTarget(null); }}>Delete message</button>
                         </>}
                       </div>}
@@ -1429,6 +1685,20 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
 
         <div className="composer-zone">
           {awaitingKeyExchange && <div className="key-exchange-notice"><strong>Waiting for MLS keys</strong><span>{mlsError[activeChat.id] || "Ask your contact to open Whisper once so their authenticated device key can be published."}</span></div>}
+          {mediaUploadState && <div className="media-upload-status" role="status"><span className="media-upload-spinner" /> <strong>{mediaUploadState}</strong><small>Only ciphertext leaves this device</small></div>}
+          {recordingSeconds > 0 && <div className="voice-recording-status" role="status"><span /> <strong>Recording voice message</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => void toggleVoiceRecording()}>Stop &amp; encrypt</button></div>}
+          {showAttachmentMenu && (
+            <div className="attachment-menu" aria-label="Encrypted media options">
+              <div><strong>Send encrypted media</strong><small>Images, GIFs, video, audio, documents, and archives</small></div>
+              <button type="button" onClick={() => mediaInputRef.current?.click()}><span>＋</span>Choose file</button>
+              <label>Delete from storage
+                <select value={mediaRetention} onChange={(event) => setMediaRetention(event.target.value as MediaRetention)}>
+                  <option value="1d">After 1 day</option><option value="7d">After 7 days</option><option value="30d">After 30 days</option><option value="forever">Only when I delete it</option>
+                </select>
+              </label>
+              <p>Files and previews are encrypted with a fresh AES-256 key before upload. The key is shared only inside the end-to-end encrypted message.</p>
+            </div>
+          )}
           {showMediaPicker && (
             <div className="media-picker" aria-label="Emoji and GIF picker">
               <div className="picker-tabs">
@@ -1456,6 +1726,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               )}
             </div>
           )}
+          <input ref={mediaInputRef} className="visually-hidden media-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/webm,audio/ogg,audio/mpeg,audio/wav,audio/mp4,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadEncryptedMedia(file); }} />
           {replyingTo && (
             <div className="reply-composer" role="status">
               <span>Replying to</span>
@@ -1471,14 +1742,14 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
             </div>
           )}
           <form className="composer" onSubmit={sendMessage}>
-            <button type="button" className="composer-button" aria-label="Encrypted attachments are not available yet" title="Encrypted attachments are not available yet" disabled>⌇</button>
+            <button type="button" className={`composer-button ${showAttachmentMenu ? "active" : ""}`} aria-label="Add encrypted attachment" title="Add encrypted attachment" onClick={() => { setShowAttachmentMenu((value) => !value); setShowMediaPicker(false); }} disabled={awaitingKeyExchange || Boolean(mediaUploadState)}>⌇</button>
             <input maxLength={MAX_MESSAGE_LENGTH} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={awaitingKeyExchange ? "Secure key exchange required" : "Write a message…"} aria-label="Message" disabled={awaitingKeyExchange} />
             <button type="button" className={`composer-button ${showMediaPicker ? "active" : ""}`} aria-label="Add emoji or GIF" onClick={() => setShowMediaPicker((value) => !value)} disabled={awaitingKeyExchange}>☺</button>
-            <button type={draft.trim() ? "submit" : "button"} className={`send-button ${draft.trim() && !awaitingKeyExchange ? "ready" : ""}`} aria-label={awaitingKeyExchange ? "Secure key exchange required" : draft.trim() ? "Send message" : "Encrypted voice messages are not available yet"} onClick={() => !draft.trim() && !awaitingKeyExchange && flash("Encrypted voice messages are not available yet")} disabled={awaitingKeyExchange}>
-              {draft.trim() ? "➤" : "♩"}
+            <button type={draft.trim() ? "submit" : "button"} className={`send-button ${draft.trim() && !awaitingKeyExchange ? "ready" : ""} ${recordingSeconds ? "recording" : ""}`} aria-label={awaitingKeyExchange ? "Secure key exchange required" : draft.trim() ? "Send message" : recordingSeconds ? "Stop and send encrypted voice message" : "Record encrypted voice message"} onClick={() => !draft.trim() && !awaitingKeyExchange && void toggleVoiceRecording()} disabled={awaitingKeyExchange || Boolean(mediaUploadState)}>
+              {draft.trim() ? "➤" : recordingSeconds ? "■" : "♩"}
             </button>
           </form>
-          <p className="composer-hint">{draft.length >= MAX_MESSAGE_LENGTH * .8 ? `${draft.length.toLocaleString()} / ${MAX_MESSAGE_LENGTH.toLocaleString()} · ` : draft ? "Draft saved on this device · " : "Enter to send · "}<span>{activeMlsStatus?.ready ? `MLS epoch ${activeMlsStatus.epoch}` : "encrypted on this device"}</span></p>
+          <p className="composer-hint">{draft.length >= MAX_MESSAGE_LENGTH * .8 ? `${draft.length.toLocaleString()} / ${MAX_MESSAGE_LENGTH.toLocaleString()} · ` : draft ? "Draft saved on this device · " : "Attach files or tap the note to record · "}<span>{activeMlsStatus?.ready ? `MLS epoch ${activeMlsStatus.epoch}` : "encrypted on this device"}</span></p>
         </div>
       </section>
 
