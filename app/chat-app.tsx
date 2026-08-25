@@ -5,15 +5,25 @@ import Image from "next/image";
 import { decryptMessage, encryptMessage } from "./client-crypto";
 import {
   cacheSentMlsMessage,
+  acceptDeviceLinkCode,
+  beginDeviceLink,
+  claimDeviceLink,
+  confirmDeviceLink,
+  createEncryptedBackup,
   createMlsConversation,
   decryptMlsMessage,
   encryptMlsMessage,
   ensureMlsDevice,
   getMlsSessionStatus,
   getSafetyNumber,
+  inspectDeviceLink,
   joinMlsConversation,
+  listAccountDevices,
   markSafetyNumberVerified,
   rotateMlsEpoch,
+  provisionDeviceToConversations,
+  restoreEncryptedBackup,
+  revokeDevice,
   syncMlsEvents,
 } from "./mls-crypto";
 
@@ -71,6 +81,7 @@ type CurrentUser = { id: string; email: string; displayName: string };
 type Person = { id: string; email: string; displayName: string; createdAt?: string };
 type ContactInvitation = { id: string; person: Person; createdAt: string };
 type SocialState = { contacts: Person[]; incoming: ContactInvitation[]; outgoing: ContactInvitation[]; blocked: Person[] };
+type DeviceSecurityState = { localDeviceId: string | null; devices: Array<{ id: string; name: string; updatedAt: string; current: boolean }>; backupUpdatedAt: string | null; canApproveLinks: boolean };
 
 const initialChats: Chat[] = [
   {
@@ -234,6 +245,13 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [mlsError, setMlsError] = useState<Record<string, string>>({});
   const [safetyNumber, setSafetyNumber] = useState<string | null>(null);
   const [rotatingKeys, setRotatingKeys] = useState(false);
+  const [deviceSecurity, setDeviceSecurity] = useState<DeviceSecurityState | null>(null);
+  const [deviceAction, setDeviceAction] = useState(false);
+  const [linkCodeInput, setLinkCodeInput] = useState("");
+  const [linkRequest, setLinkRequest] = useState<{ code: string; status: string; confirmation: string | null } | null>(null);
+  const [linkApproval, setLinkApproval] = useState<{ confirmation: string } | null>(null);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [newRecoveryCode, setNewRecoveryCode] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -298,6 +316,29 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     getSafetyNumber(currentUser, peerId).then((number) => { if (!cancelled) setSafetyNumber(number); }).catch(() => { if (!cancelled) setSafetyNumber(null); });
     return () => { cancelled = true; };
   }, [activeChat.memberIds, activeMlsStatus?.ready, currentUser, showInfo]);
+
+  useEffect(() => {
+    if (!showAccount) return;
+    let cancelled = false;
+    listAccountDevices(currentUser).then((state) => { if (!cancelled) setDeviceSecurity(state); }).catch(() => { if (!cancelled) setDeviceSecurity(null); });
+    return () => { cancelled = true; };
+  }, [currentUser, showAccount]);
+
+  useEffect(() => {
+    if (!linkRequest || linkRequest.status === "claimed") return;
+    let cancelled = false;
+    async function pollLink() {
+      try {
+        const state = await inspectDeviceLink(currentUser);
+        if (!cancelled && state) setLinkRequest((current) => current ? { ...current, status: state.status, confirmation: state.confirmation } : current);
+      } catch {
+        // The request remains visible so the user can retry or create a fresh code.
+      }
+    }
+    void pollLink();
+    const interval = window.setInterval(pollLink, 2500);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [currentUser, linkRequest]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -707,6 +748,129 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       flash(error instanceof Error ? error.message : "Profile could not be updated");
     } finally {
       setSocialAction(false);
+    }
+  }
+
+  async function refreshDeviceSecurity() {
+    const state = await listAccountDevices(currentUser);
+    setDeviceSecurity(state);
+    return state;
+  }
+
+  async function startLinkingThisBrowser() {
+    if (deviceAction) return;
+    setDeviceAction(true);
+    try {
+      const request = await beginDeviceLink(currentUser, `${navigator.platform || "Browser"} · Whisper Web`);
+      setLinkRequest({ code: request.code, status: "pending", confirmation: null });
+      flash("Link code created. Enter it on a trusted device.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Device linking could not start");
+    } finally {
+      setDeviceAction(false);
+    }
+  }
+
+  async function offerDeviceLink() {
+    if (deviceAction || !linkCodeInput.trim()) return;
+    setDeviceAction(true);
+    try {
+      const approval = await acceptDeviceLinkCode(currentUser, linkCodeInput);
+      setLinkApproval({ confirmation: approval.confirmation });
+      flash("Compare the six groups on both devices before transferring keys");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Link code could not be accepted");
+    } finally {
+      setDeviceAction(false);
+    }
+  }
+
+  async function approveDeviceTransfer() {
+    if (deviceAction || !linkApproval) return;
+    setDeviceAction(true);
+    try {
+      await confirmDeviceLink(currentUser);
+      setLinkApproval(null);
+      setLinkCodeInput("");
+      flash("Identity transferred securely. Finish linking on the new device.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Encrypted key transfer failed");
+    } finally {
+      setDeviceAction(false);
+    }
+  }
+
+  async function finishDeviceLink() {
+    if (deviceAction) return;
+    setDeviceAction(true);
+    try {
+      const linked = await claimDeviceLink(currentUser);
+      setMlsDeviceId(linked.deviceId);
+      setLinkRequest(null);
+      await refreshDeviceSecurity();
+      flash("This browser is now a linked Whisper device");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Device linking could not be completed");
+    } finally {
+      setDeviceAction(false);
+    }
+  }
+
+  async function backUpAccount() {
+    if (deviceAction) return;
+    setDeviceAction(true);
+    try {
+      const backup = await createEncryptedBackup(currentUser);
+      setNewRecoveryCode(backup.recoveryCode);
+      await refreshDeviceSecurity();
+      flash("Encrypted backup updated. Store the recovery key offline.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Encrypted backup failed");
+    } finally {
+      setDeviceAction(false);
+    }
+  }
+
+  async function recoverAccount() {
+    if (deviceAction || !recoveryCode.trim()) return;
+    setDeviceAction(true);
+    try {
+      const recovered = await restoreEncryptedBackup(currentUser, recoveryCode);
+      setMlsDeviceId(recovered.deviceId);
+      setRecoveryCode("");
+      await refreshDeviceSecurity();
+      flash(`Device recovered with ${recovered.restoredMessages} encrypted history records`);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Account recovery failed");
+    } finally {
+      setDeviceAction(false);
+    }
+  }
+
+  async function syncLinkedDevice(deviceId: string) {
+    if (deviceAction) return;
+    setDeviceAction(true);
+    try {
+      const result = await provisionDeviceToConversations(currentUser, deviceId);
+      flash(`${result.provisioned} chat${result.provisioned === 1 ? "" : "s"} securely added to that device`);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Linked-device chat sync failed");
+    } finally {
+      setDeviceAction(false);
+    }
+  }
+
+  async function removeLinkedDevice(deviceId: string) {
+    if (deviceAction) return;
+    setDeviceAction(true);
+    try {
+      await revokeDevice(currentUser, deviceId);
+      await refreshDeviceSecurity();
+      flash("Device removed and MLS memberships rotated");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Device could not be removed");
+    } finally {
+      setDeviceAction(false);
     }
   }
 
@@ -1386,6 +1550,23 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               <label htmlFor="profile-name">Display name</label>
               <div><input id="profile-name" maxLength={60} value={accountName} onChange={(event) => setAccountName(event.target.value)} /><button type="submit" disabled={socialAction || accountName.trim().length < 2}>Save</button></div>
             </form>
+            <section className="device-security-section" aria-labelledby="device-security-title">
+              <div className="social-title"><h3 id="device-security-title">Devices & recovery</h3><span>{deviceSecurity?.devices.length ?? 0}</span></div>
+              {!deviceSecurity ? <p className="social-loading">Loading encrypted devices…</p> : <>
+                <div className="device-list">
+                  {deviceSecurity.devices.map((device) => <div className="device-row" key={device.id}>
+                    <span className="device-symbol">{device.current ? "●" : "○"}</span>
+                    <span><strong>{device.name}</strong><small>{device.current ? "This browser" : `Active · ${device.updatedAt ? new Date(device.updatedAt).toLocaleDateString() : "linked"}`}</small></span>
+                    {!device.current && deviceSecurity.localDeviceId && <span className="device-actions"><button disabled={deviceAction} onClick={() => void syncLinkedDevice(device.id)}>Sync chats</button><button className="danger-text" disabled={deviceAction} onClick={() => void removeLinkedDevice(device.id)}>Remove</button></span>}
+                  </div>)}
+                </div>
+                {!deviceSecurity.localDeviceId && <div className="device-callout warning"><strong>This browser is not linked</strong><span>Use a trusted device or your recovery key. A new identity will not silently replace your existing account.</span><button disabled={deviceAction || Boolean(linkRequest)} onClick={() => void startLinkingThisBrowser()}>Create link code</button></div>}
+                {linkRequest && <div className="device-callout link-code-card"><strong>Enter this code on a trusted device</strong><code>{linkRequest.code}</code><span>Status: {linkRequest.status}{linkRequest.confirmation ? " · compare the authentication code below" : ""}</span>{linkRequest.confirmation && <b className="link-confirmation">{linkRequest.confirmation}</b>}{linkRequest.status === "ready" && <button disabled={deviceAction} onClick={() => void finishDeviceLink()}>Finish linking this browser</button>}</div>}
+                {deviceSecurity.canApproveLinks && <div className="device-callout"><strong>Link another browser</strong><span>Enter the high-entropy code shown there. Compare all six authentication groups before approval. A legacy 0.5 identity is securely rotated the first time recovery is enabled, which changes contact safety numbers.</span><div className="inline-security-form"><input value={linkCodeInput} onChange={(event) => setLinkCodeInput(event.target.value)} placeholder="Device link code" aria-label="Device link code" /><button disabled={deviceAction || !linkCodeInput.trim()} onClick={() => void offerDeviceLink()}>Continue</button></div>{linkApproval && <div className="confirmation-check"><span>Authentication code</span><b>{linkApproval.confirmation}</b><button disabled={deviceAction} onClick={() => void approveDeviceTransfer()}>Codes match — transfer keys</button></div>}</div>}
+                <div className="device-callout backup-card"><strong>Encrypted recovery backup</strong><span>{deviceSecurity.backupUpdatedAt ? `Last updated ${new Date(deviceSecurity.backupUpdatedAt).toLocaleString()}. ` : "No backup yet. "}Only someone with your 256-bit recovery key can decrypt it.</span>{deviceSecurity.localDeviceId && <button disabled={deviceAction} onClick={() => void backUpAccount()}>{deviceSecurity.backupUpdatedAt ? "Update backup" : "Create backup"}</button>}{newRecoveryCode && <div className="recovery-key"><span>Store this key offline</span><code>{newRecoveryCode}</code><button onClick={() => void navigator.clipboard.writeText(newRecoveryCode).then(() => flash("Recovery key copied"))}>Copy recovery key</button></div>}</div>
+                {!deviceSecurity.localDeviceId && deviceSecurity.backupUpdatedAt && <div className="device-callout recovery-card"><strong>Recover a lost device</strong><span>Recovery replaces other active devices and restores encrypted cached history. Contacts must add this new device back to active MLS chats.</span><div className="inline-security-form"><input value={recoveryCode} onChange={(event) => setRecoveryCode(event.target.value)} placeholder="Recovery key" aria-label="Recovery key" /><button disabled={deviceAction || !recoveryCode.trim()} onClick={() => void recoverAccount()}>Recover</button></div></div>}
+              </>}
+            </section>
             <section className="social-section">
               <div className="social-title"><h3>Contacts</h3><span>{social.contacts.length}</span></div>
               <form className="invite-form" onSubmit={sendContactInvitation}><input type="email" maxLength={254} value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="Invite by registered email" aria-label="Contact email" /><button disabled={socialAction || !inviteEmail.trim()}>Invite</button></form>

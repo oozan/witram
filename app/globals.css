@@ -392,6 +392,28 @@ button.reply-quote:hover { background: rgba(15,124,102,.12); color: var(--green-
 .profile-form button, .invite-form button { padding: 0 15px; border: 0; border-radius: 10px; background: var(--green); color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
 .profile-form button:disabled, .invite-form button:disabled { opacity: .45; cursor: not-allowed; }
 .social-section { margin-top: 22px; }
+.device-security-section { margin-top: 22px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: #f8faf9; }
+.device-list { display: grid; gap: 6px; }
+.device-row { display: flex; gap: 9px; align-items: center; padding: 9px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+.device-symbol { color: var(--green); font-size: 10px; }
+.device-row > span:nth-child(2) { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.device-row strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.device-row small { color: var(--muted); font-size: 8px; }
+.device-actions { display: flex; gap: 4px; }
+.device-actions button, .device-callout button, .confirmation-check button, .recovery-key button { min-height: 31px; padding: 0 9px; border: 0; border-radius: 8px; background: var(--green-soft); color: var(--green-deep); font-size: 8px; font-weight: 800; cursor: pointer; }
+.device-actions button.danger-text { background: #f8e8e5; color: #a84d45; }
+.device-actions button:disabled, .device-callout button:disabled { cursor: not-allowed; opacity: .45; }
+.device-callout { display: flex; margin-top: 10px; padding: 12px; flex-direction: column; gap: 7px; border: 1px solid #dbe7e2; border-radius: 12px; background: #fff; }
+.device-callout.warning { border-color: #eadba9; background: #fff9e8; }
+.device-callout strong { font-size: 10px; }
+.device-callout > span, .confirmation-check span, .recovery-key span { color: var(--muted); font-size: 8px; line-height: 1.5; }
+.device-callout > button { align-self: flex-start; }
+.link-code-card code, .recovery-key code { padding: 8px; border-radius: 8px; background: var(--paper); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 1.5; overflow-wrap: anywhere; }
+.link-confirmation { color: var(--green-deep); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: .3px; }
+.inline-security-form { display: flex; gap: 6px; }
+.inline-security-form input { height: 36px; flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+.confirmation-check, .recovery-key { display: flex; padding-top: 7px; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); }
+.confirmation-check b { color: var(--green-deep); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
 .social-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
 .social-title h3 { margin: 0; font-size: 15px; }
 .social-title > span { display: grid; min-width: 23px; height: 23px; place-items: center; border-radius: 12px; background: var(--green-soft); color: var(--green-deep); font-size: 10px; font-weight: 900; }
@@ -443,6 +465,8 @@ button.person-row:hover { border-color: #aacfc3; background: #f5faf8; }
 .theme-dark .conversation:hover, .theme-dark .icon-button:hover { background: #22332d; }
 .theme-dark .conversation.active { background: #1c3b32; }
 .theme-dark .search-wrap, .theme-dark .chat-search-field, .theme-dark .composer, .theme-dark .info-card, .theme-dark .new-chat-modal input, .theme-dark .profile-form, .theme-dark .person-row, .theme-dark .report-modal select, .theme-dark .report-modal textarea { border-color: #354840; background: #202f2a; }
+.theme-dark .device-security-section, .theme-dark .device-row, .theme-dark .device-callout { border-color: #354840; background: #202f2a; }
+.theme-dark .device-callout.warning { border-color: #685b35; background: #302c1e; }
 .theme-dark .safety-number { border-color: #45665a; background: #17251f; color: #d9e8e2; }
 .theme-dark .bubble, .theme-dark .quick-actions button, .theme-dark .archive-chat-action, .theme-dark .message-action-menu, .theme-dark .reaction-picker { background: #22322c; }
 .theme-dark .mine .bubble { background: #19483a; }
