@@ -210,6 +210,52 @@ test("round-trips the device-link X25519 and authenticated-encryption primitives
   assert.equal(new TextDecoder().decode(plaintext), "account-key");
 });
 
+test("keeps uploaded media and thumbnails encrypted outside the browser", async () => {
+  const [cryptoClient, reserve, objectRoute, mediaServer, client, schema, migration, hosting, worker] = await Promise.all([
+    readFile(new URL("../app/media-crypto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/attachments/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/attachments/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/_lib/media.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0004_omniscient_talkback.sql", import.meta.url), "utf8"),
+    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(hosting, /"r2": "MEDIA"/);
+  assert.match(cryptoClient, /AES-GCM/);
+  assert.match(cryptoClient, /crypto\.getRandomValues\(new Uint8Array\(32\)\)/);
+  assert.match(cryptoClient, /createEncryptedThumbnail/);
+  assert.match(cryptoClient, /file contents do not match the declared file type/i);
+  assert.match(reserve, /conversationMember/);
+  assert.match(reserve, /thumbnailCiphertextSize/);
+  assert.doesNotMatch(reserve, /filename|payload\.mime|payload\.key|thumbnailIv/);
+  assert.match(objectRoute, /application\/octet-stream/);
+  assert.match(objectRoute, /contentLength !== expectedSize/);
+  assert.match(objectRoute, /x-whisper-encryption/);
+  assert.match(mediaServer, /purgeExpiredAttachments/);
+  assert.match(mediaServer, /status = 'pending' AND created_at <=/);
+  assert.match(mediaServer, /"1d", "7d", "30d", "forever"/);
+  assert.match(schema, /export const attachments/);
+  assert.match(migration, /CREATE TABLE `attachments`/);
+  assert.match(client, /\[attachment\]/);
+  assert.match(client, /MediaRecorder/);
+  assert.match(client, /Only ciphertext leaves this device/);
+  assert.match(worker, /microphone=\(self\)/);
+});
+
+test("round-trips independent AES-GCM media ciphertext", async () => {
+  const keyBytes = crypto.getRandomValues(new Uint8Array(32));
+  const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const original = crypto.getRandomValues(new Uint8Array(4096));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, original);
+  assert.equal(ciphertext.byteLength, original.byteLength + 16);
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  assert.deepEqual(new Uint8Array(plaintext), original);
+});
+
 test("stores reply context inside encrypted message content", async () => {
   const [client, route] = await Promise.all([
     readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
@@ -298,7 +344,7 @@ test("hardens message limits, connectivity recovery, and unsupported controls", 
   assert.match(client, /maxLength=\{MAX_MESSAGE_LENGTH\}/);
   assert.match(client, /addEventListener\("online"/);
   assert.match(client, /retrySecureSync/);
-  assert.match(client, /Encrypted attachments are not available yet/);
+  assert.match(client, /Add encrypted attachment/);
   assert.match(client, /Encrypted calls are not available yet/);
   assert.match(errorBoundary, /reset\(\)/);
 });

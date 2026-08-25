@@ -2,7 +2,7 @@
 
 ## Audit status
 
-Whisper 0.6 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
+Whisper 0.7 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2 and Web Crypto AES-GCM for media, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
 
 ## Implemented protocol boundary
 
@@ -18,8 +18,11 @@ Whisper 0.6 is **not formally audited**. It uses the standardized MLS protocol f
 - A linked device receives the stable account signing identity but creates a distinct device identity and a pool of one-time MLS key packages.
 - Existing devices add a linked device to each chat with a separate MLS Add commit and Welcome. Device removal is account-signed and produces MLS Remove commits before server revocation.
 - Recovery backups contain the wrapped account signing key and locally cached history, then use HKDF-SHA-256 and AES-256-GCM under a random 256-bit recovery key that is never uploaded.
+- Every uploaded media object receives a fresh random 256-bit AES-GCM key and 96-bit IV. Thumbnails use the same per-object key with a separately generated IV. Keys, IVs, filenames, and MIME types are carried inside encrypted message bodies rather than attachment metadata.
+- The R2 boundary accepts only `application/octet-stream` ciphertext with a size fixed at reservation time. D1 stores the conversation, owner, broad media kind, ciphertext sizes, state, and expiry required for authorization and retention.
+- Downloads require current conversation membership and use `no-store`; decryption, MIME restoration, playback, and file naming happen only in the browser.
 
-The service still observes account identifiers, conversation membership, device identifiers, message timing and sizes, and report metadata. End-to-end encryption does not hide this metadata.
+The service still observes account identifiers, conversation membership, device identifiers, message and attachment timing and sizes, broad attachment kind, retention choice, and report metadata. End-to-end encryption does not hide this metadata.
 
 ## Known limitations
 
@@ -29,7 +32,10 @@ The service still observes account identifiers, conversation membership, device 
 - Enabling link/recovery material on a legacy 0.5 device performs an account-authorized identity rotation; contacts will observe a changed safety number.
 - Recovery restores account identity and cached history but deliberately does not clone live MLS session state. A surviving member/device must provision the replacement into each chat.
 - Backup freshness is user-triggered; background backup scheduling and rollback-resistant backup version transparency are not implemented.
-- General group membership UI, encrypted attachments, and call encryption are not implemented.
+- General group membership UI and call encryption are not implemented.
+- Expired and abandoned media is removed opportunistically during attachment API activity. A scheduled production sweep or bucket lifecycle policy is still required to guarantee prompt deletion during periods with no traffic.
+- Web clients cannot reliably scan arbitrary encrypted uploads for malware. Type/signature validation is a safety boundary, not antivirus; downloaded files remain untrusted content.
+- Online Tenor results are provider-hosted URLs and are not covered by the encrypted upload pipeline. Users must attach a local GIF to receive encrypted R2 storage.
 - Safety-number verification is local to a browser and is not automatically synchronized.
 - Server-side epoch ordering is intentionally not trusted; clients validate commits through MLS. Operational rate limits and abuse monitoring still need deployment-level configuration.
 

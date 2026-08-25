@@ -2,9 +2,9 @@
 
 Whisper is a responsive Telegram-inspired chat application with client-side encryption and durable ciphertext storage.
 
-## 0.6 milestone
+## 0.7 milestone
 
-The 0.6 release adds a multi-device lifecycle around the RFC 9420 MLS foundation: authenticated browser linking, end-to-end encrypted account-key transfer, one-time key-package pools, explicit MLS chat provisioning, signed device removal, recovery-key backups, and lost-device replacement. Saved Messages retain the original device-local AES-GCM vault.
+The 0.7 release adds encrypted media: originals and thumbnails are protected in the browser with a fresh AES-256-GCM key before R2 upload, and that key travels only inside the existing end-to-end encrypted message. It supports images, local GIFs, video, voice/audio, files, membership-authorized retrieval, explicit deletion, and 1-day, 7-day, 30-day, or manual retention.
 
 ## What works
 
@@ -62,6 +62,12 @@ The 0.6 release adds a multi-device lifecycle around the RFC 9420 MLS foundation
 - Payload size limits, no-store API responses, and baseline browser security headers
 - ChatGPT/Sites identity headers enforced by every account and chat API
 - Generated and versioned database migrations
+- Client-side encrypted image, local GIF, video, audio, voice-message, and file uploads
+- Separately encrypted WebP thumbnails for image, GIF, and video previews
+- MIME allowlists, file-signature checks, and per-media size limits before encryption
+- R2 ciphertext storage with D1 ownership, membership, upload-state, and expiry metadata
+- On-demand client decryption for previews, playback, and downloads
+- Per-upload retention controls plus immediate encrypted-object deletion when the sender deletes a message
 
 ## Run locally
 
@@ -80,6 +86,8 @@ Open `http://localhost:3000`.
 
 Whisper keeps its built-in animated GIF collection available without any external service. To also search Tenor online, copy `.env.example` to `.env.local` and add a Tenor API key as `TENOR_API_KEY`. Configure the same secret in the deployed Sites environment to enable online search there.
 
+Online GIF search is a separate convenience feature: the provider receives the search request and the sent result remains a provider URL. For end-to-end encrypted storage, download a GIF and attach it through the encrypted file picker instead.
+
 ## Quality checks
 
 ```bash
@@ -93,19 +101,21 @@ The test command creates the production build and verifies the rendered product 
 
 Direct-chat bodies are encrypted by `ts-mls` 1.6 using the RFC 9420 ciphersuite `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519`. The server validates account membership and signed device bundles but stores only MLS ciphertext, public commits, Welcome payloads, and routing metadata. Saved Messages continue to use AES-256-GCM with a non-exportable browser key.
 
-This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates a standardized protocol; that is not the same as an audited product. Multi-device linking, removal, and recovery are now implemented, but recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. Encrypted media, general group membership UI, push notifications, XSS hardening review, abuse operations, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
+This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates standardized primitives; that is not the same as an audited product. Multi-device linking, removal, recovery, and encrypted media are implemented, but recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. General group membership UI, push notifications, XSS hardening review, abuse operations, scheduled retention sweeps, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
 
 ## Project shape
 
 - `app/chat-app.tsx` — product interface and chat interactions
 - `app/client-crypto.ts` — device-side encryption and key vault
 - `app/mls-crypto.ts` — browser MLS state, key packages, epochs, and safety numbers
+- `app/media-crypto.ts` — file validation, AES-GCM media encryption, decryption, and thumbnail generation
 - `app/api/keys/route.ts` — authenticated account/device identity directory
 - `app/api/mls/` — opaque MLS Welcome and public-commit transport
 - `app/api/devices/links/route.ts` — expiring encrypted device-link rendezvous
 - `app/api/backups/route.ts` — ciphertext-only recovery backup storage
 - `app/api/conversations/route.ts` — durable user-owned conversation API
 - `app/api/messages/route.ts` — membership-protected ciphertext-only message API
+- `app/api/attachments/` — authorized R2 ciphertext upload, retrieval, finalization, retention, and deletion
 - `app/api/account/route.ts` — profile registration and updates
 - `app/api/contacts/route.ts` — invitations and accepted contacts
 - `app/api/blocks/route.ts` — contact blocking and unblocking
