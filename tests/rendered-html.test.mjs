@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
+async function render(path = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
@@ -254,6 +254,60 @@ test("round-trips independent AES-GCM media ciphertext", async () => {
   assert.equal(ciphertext.byteLength, original.byteLength + 16);
   const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
   assert.deepEqual(new Uint8Array(plaintext), original);
+});
+
+test("implements persistent production safety and abuse operations", async () => {
+  const [safety, social, health, operations, messages, attachments, contacts, reports, gifs, schema, migration, environment, runbook] = await Promise.all([
+    readFile(new URL("../app/api/_lib/safety.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/_lib/social.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/health/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/operations/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/attachments/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/contacts/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/reports/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/gifs/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0005_sad_vin_gonzales.sql", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../docs/OPERATIONS.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(safety, /ON CONFLICT\(actor_key, scope, window_start\) DO UPDATE/);
+  assert.match(safety, /request_count = request_count \+ 1/);
+  assert.match(safety, /enforceRestriction/);
+  assert.match(safety, /ALERT_WEBHOOK_URL/);
+  assert.doesNotMatch(safety, /ciphertext|filename|email/);
+  assert.match(social, /CREATE TABLE IF NOT EXISTS security_events/);
+  assert.match(health, /SELECT 1 AS healthy/);
+  assert.match(health, /mediaBucket\(\)\.head/);
+  assert.match(operations, /isOperationsAdmin/);
+  assert.match(operations, /abuse_restrictions/);
+  assert.doesNotMatch(operations, /FROM\s+messages|SELECT[^;]+reports[^;]+details|ciphertext/is);
+  assert.match(messages, /messages-minute/);
+  assert.match(attachments, /costLimit: 300/);
+  assert.match(contacts, /contact-invites/);
+  assert.match(reports, /reports-day/);
+  assert.match(gifs, /anonymousActorKey/);
+  assert.match(schema, /rateLimitBuckets/);
+  assert.match(schema, /securityEvents/);
+  assert.match(schema, /abuseRestrictions/);
+  assert.match(migration, /CREATE TABLE `rate_limit_buckets`/);
+  assert.match(environment, /OPS_ADMIN_USER_IDS/);
+  assert.match(runbook, /Quarterly recovery drill/);
+  assert.match(runbook, /point-in-time recovery/i);
+});
+
+test("publishes privacy and terms disclosures", async () => {
+  const [privacyResponse, termsResponse] = await Promise.all([render("/privacy"), render("/terms")]);
+  assert.equal(privacyResponse.status, 200);
+  assert.equal(termsResponse.status, 200);
+  const [privacy, terms] = await Promise.all([privacyResponse.text(), termsResponse.text()]);
+  assert.match(privacy, /Privacy Policy/);
+  assert.match(privacy, /What end-to-end encryption does and does not hide/);
+  assert.match(privacy, /We do not sell personal information/);
+  assert.match(terms, /Terms of Service/);
+  assert.match(terms, /Acceptable use/);
+  assert.match(terms, /has not received a formal independent security audit/);
 });
 
 test("stores reply context inside encrypted message content", async () => {
