@@ -1,3 +1,5 @@
+import { performance } from "node:perf_hooks";
+
 const AUTHORIZATION = "I_HAVE_AUTHORIZATION";
 const targetArg = process.argv.find((value) => value.startsWith("--target="));
 const target = new URL(targetArg?.slice(9) || process.env.SECURITY_TEST_TARGET || "http://localhost:3000");
