@@ -49,8 +49,8 @@ await probe("invalid attachment reference", "/api/attachments/not-a-valid-identi
   detail: `rejected with ${response.status}`,
 }));
 await probe("security status page", "/security", (response, body) => ({
-  result: response.status === 200 && /independent review pending/i.test(body) ? "pass" : "fail",
-  detail: response.status === 200 ? "review status is publicly disclosed" : `unexpected status ${response.status}`,
+  result: response.status === 200 && /independent review (?:is )?pending/i.test(body) ? "pass" : "fail",
+  detail: response.status === 200 && /independent review (?:is )?pending/i.test(body) ? "review status is publicly disclosed" : `status page did not disclose the pending review (HTTP ${response.status})`,
 }));
 
 const failed = results.filter((item) => item.result !== "pass");
