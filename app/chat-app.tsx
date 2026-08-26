@@ -1563,7 +1563,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
           ))}
         </div>
 
-        <footer className="privacy-footer"><span>⌁</span> End-to-end encrypted <a href="/privacy">Privacy</a><a href="/terms">Terms</a><button onClick={() => setShowShortcutHelp(true)} aria-label="Show keyboard shortcuts">⌘ /</button></footer>
+        <footer className="privacy-footer"><span>⌁</span> End-to-end encrypted <a href="/security">Security</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><button onClick={() => setShowShortcutHelp(true)} aria-label="Show keyboard shortcuts">⌘ /</button></footer>
       </section>
 
       <section className={`chat-panel ${mobileChatOpen ? "chat-open-mobile" : ""}`} aria-label={`Chat with ${activeChat.name}`}>
@@ -1850,7 +1850,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               {!!social.blocked.length && <div className="blocked-list"><strong>Blocked accounts</strong>{social.blocked.map((person) => <div key={person.id}><span>{person.displayName}</span><button onClick={() => void setBlocked(person.id, false)}>Unblock</button></div>)}</div>}
             </section>
             <a className="sign-out-link" href="/signout-with-chatgpt?return_to=%2F">Sign out of Whisper</a>
-            <nav className="account-legal-links" aria-label="Legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></nav>
+            <nav className="account-legal-links" aria-label="Legal"><a href="/security">Security status</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></nav>
           </section>
         </div>
       )}

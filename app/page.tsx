@@ -15,7 +15,7 @@ export default async function Home() {
           <p>Sign in securely to create your account, connect with people you trust, and access your encrypted conversations.</p>
           <a href={chatGPTSignInPath("/")}>Sign in with ChatGPT</a>
           <small>Your ChatGPT identity is used for authentication. Whisper never asks for or stores your password.</small>
-          <nav className="auth-legal-links" aria-label="Legal"><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+          <nav className="auth-legal-links" aria-label="Legal"><a href="/security">Security</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
         </section>
       </main>
     );

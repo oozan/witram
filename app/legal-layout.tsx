@@ -11,7 +11,7 @@ export function LegalLayout({ title, summary, children }: { title: string; summa
         <strong>{summary}</strong>
       </header>
       <div className={styles.content}>{children}</div>
-      <footer><Link href="/">Return to Whisper</Link><span>·</span><Link href="/privacy">Privacy</Link><span>·</span><Link href="/terms">Terms</Link></footer>
+      <footer><Link href="/">Return to Whisper</Link><span>·</span><Link href="/security">Security</Link><span>·</span><Link href="/privacy">Privacy</Link><span>·</span><Link href="/terms">Terms</Link></footer>
     </article>
   </main>;
 }

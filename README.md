@@ -2,9 +2,9 @@
 
 Whisper is a responsive Telegram-inspired chat application with client-side encryption and durable ciphertext storage.
 
-## 0.8 milestone
+## 0.9 milestone
 
-The 0.8 release adds the production-safety control plane: persistent per-account and privacy-preserving network rate limits, bandwidth quotas, scoped abuse restrictions, security-event recording, health checks, restricted operational metrics, optional critical-event webhooks, public legal pages, and a tested backup/disaster-recovery runbook.
+The 0.9 release makes security review repeatable and externally reviewable: a formal threat register, cryptographic implementation dossier, authorization-gated passive penetration probe, scheduled npm/CodeQL/dependency scans, Dependabot coverage, an incident-response plan, and a public review-status page. These are review-readiness controls; an independent audit and penetration test are still pending.
 
 ## What works
 
@@ -75,6 +75,11 @@ The 0.8 release adds the production-safety control plane: persistent per-account
 - Optional HTTPS webhook alerts for critical service failures
 - Public Privacy Policy and Terms of Service linked from sign-in and account surfaces
 - Backup, quarterly recovery-drill, incident-response, and release procedures
+- Versioned threat model and cryptographic review dossier mapped to code paths
+- Authorization-gated passive penetration probe with machine-readable results
+- Scheduled CodeQL, dependency review, npm audit, lint, build, and boundary tests
+- Dependabot coverage for npm packages and GitHub Actions
+- Public security status that does not overstate the independent-review status
 
 ## Run locally
 
@@ -100,9 +105,10 @@ Online GIF search is a separate convenience feature: the provider receives the s
 ```bash
 npm run lint
 npm test
+npm run security:review
 ```
 
-The test command creates the production build and verifies the rendered product and encryption boundary.
+The test command creates the production build and verifies the rendered product and encryption boundary. The security review also checks pinned dependencies, cryptographic/storage invariants, unsafe browser sinks, known production dependency advisories, and lint.
 
 ## Security model
 
@@ -134,3 +140,7 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `drizzle/` — generated D1 migration
 - `.openai/hosting.json` — deployment bindings
 - `docs/OPERATIONS.md` — monitoring, abuse response, backup, disaster recovery, and release runbook
+- `docs/THREAT_MODEL.md` — assets, trust boundaries, adversaries, threat register, and residual risks
+- `docs/CRYPTOGRAPHY_REVIEW.md` — primitive inventory, key lifecycle, audit invariants, and review map
+- `docs/PENETRATION_TEST_PLAN.md` — authorization, test matrix, evidence, severity, and acceptance rules
+- `docs/INCIDENT_RESPONSE.md` — severity model, containment/recovery process, and security playbooks

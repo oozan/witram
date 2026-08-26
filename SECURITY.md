@@ -2,7 +2,9 @@
 
 ## Audit status
 
-Whisper 0.8 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2 and Web Crypto AES-GCM for media, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
+Whisper 0.9 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2 and Web Crypto AES-GCM for media, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
+
+The repository now contains a maintainer-reviewed threat model, cryptographic review dossier, authorization-gated passive probe, scheduled dependency/CodeQL review workflow, and incident-response plan. They make an independent assessment reproducible; they do not make the maintainer independent from the implementation. See `docs/THREAT_MODEL.md`, `docs/CRYPTOGRAPHY_REVIEW.md`, `docs/PENETRATION_TEST_PLAN.md`, and `docs/INCIDENT_RESPONSE.md`.
 
 ## Implemented protocol boundary
 
@@ -41,13 +43,14 @@ The service still observes account identifiers, conversation membership, device 
 - Online Tenor results are provider-hosted URLs and are not covered by the encrypted upload pipeline. Users must attach a local GIF to receive encrypted R2 storage.
 - Critical webhook alerts are inactive until an operator configures and tests `ALERT_WEBHOOK_URL`; stored security events are not a substitute for a staffed incident-response process.
 - Infrastructure snapshot, point-in-time recovery, object replication/versioning, external uptime monitoring, alert routing, and recovery drills require operator configuration in the hosting and monitoring platforms. The repository provides a runbook but cannot guarantee those external controls are enabled.
+- Automated scanning finds known and modeled classes of weakness but is not a substitute for manual protocol review, adversarial penetration testing, browser/runtime review, or deployment/IAM inspection.
 - Safety-number verification is local to a browser and is not automatically synchronized.
 - Server-side epoch ordering is intentionally not trusted; clients validate commits through MLS. Operational rate limits and abuse monitoring still need deployment-level configuration.
 
 ## Review checklist before production
 
 1. Commission an independent review of the identity binding, key-package lifecycle, Welcome transport, epoch synchronization, and local state persistence.
-2. Pin and audit the complete dependency tree, add reproducible builds, and establish a vulnerability-response process.
+2. Review every automated dependency and CodeQL finding, verify build provenance, and establish signed/reproducible release artifacts.
 3. Audit multi-device linking/removal and recovery ceremonies, including relay compromise, stale backups, concurrent commits, and recovery rollback.
 4. Add protocol interoperability, replay, concurrency, corrupted-state, and larger multi-device test-vector suites.
 5. Complete CSP/XSS review, rate limiting, telemetry minimization, retention rules, moderation operations, and incident response.
