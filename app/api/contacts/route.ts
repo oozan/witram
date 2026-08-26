@@ -1,4 +1,5 @@
 import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceWriteSafety, safetyError } from "../_lib/safety";
 
 type StoredContact = { id: string; email: string; display_name: string | null; created_at: string };
 type StoredInvitation = { id: string; user_id: string; email: string; display_name: string | null; created_at: string };
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceWriteSafety({ userId: current.userId, scope: "contact-invites", restriction: "contacts", endpoint: "/api/contacts", limit: 8, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
   const db = database();
   const recipient = await db.prepare("SELECT id, email, display_name FROM users WHERE email = ? LIMIT 1").bind(email).first<{ id: string; email: string; display_name: string | null }>();
   if (!recipient) return json({ error: "That person must sign in to Whisper once before you can invite them" }, { status: 404 });
@@ -98,6 +100,7 @@ export async function PATCH(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceWriteSafety({ userId: current.userId, scope: "contact-responses", restriction: "contacts", endpoint: "/api/contacts", limit: 40, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
   const db = database();
   const invitation = await db.prepare(
     "SELECT sender_id, recipient_id FROM contact_invitations WHERE id = ? AND recipient_id = ? AND status = 'pending' LIMIT 1",

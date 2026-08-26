@@ -1,4 +1,5 @@
 import { database, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceRateLimit, recordSecurityEvent, safetyError } from "../_lib/safety";
 
 const categories = new Set(["spam", "harassment", "impersonation", "illegal", "other"]);
 
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "reports-day", endpoint: "/api/reports", limit: 8, windowSeconds: 86_400 }); } catch (error) { return safetyError(error); }
   const db = database();
   if (conversationId && !await db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1").bind(conversationId, current.userId).first()) {
     return json({ error: "You cannot report a conversation you do not belong to" }, { status: 403 });
@@ -34,5 +36,6 @@ export async function POST(request: Request) {
   await db.prepare(
     "INSERT INTO reports (id, reporter_id, reported_user_id, conversation_id, category, details) VALUES (?, ?, ?, ?, ?, ?)",
   ).bind(id, current.userId, userId, conversationId, category, details || null).run();
+  await recordSecurityEvent({ actorId: current.userId, category: "abuse_report_submitted", severity: "info", endpoint: "/api/reports", metadata: { category, reportedUserId: userId, hasConversation: Boolean(conversationId) } });
   return json({ report: { id, status: "open" } }, { status: 201 });
 }

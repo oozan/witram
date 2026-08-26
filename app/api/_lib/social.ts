@@ -146,6 +146,34 @@ export async function initializeDatabase() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TEXT
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+      actor_key TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      window_start INTEGER NOT NULL,
+      request_count INTEGER NOT NULL DEFAULT 0,
+      cost INTEGER NOT NULL DEFAULT 0,
+      expires_at INTEGER NOT NULL,
+      PRIMARY KEY (actor_key, scope, window_start)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS security_events (
+      id TEXT PRIMARY KEY,
+      actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      category TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS abuse_restrictions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scope TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      expires_at TEXT,
+      revoked_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS mls_welcomes (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -202,6 +230,11 @@ export async function initializeDatabase() {
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_object_key ON attachments(object_key)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_attachments_conversation_status ON attachments(conversation_id, status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_attachments_expiry_status ON attachments(expires_at, status)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_rate_limit_buckets_expiry ON rate_limit_buckets(expires_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_security_events_created_at ON security_events(created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_security_events_category_created ON security_events(category, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_security_events_actor_created ON security_events(actor_id, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_abuse_restrictions_user_active ON abuse_restrictions(user_id, revoked_at, expires_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_devices_user_active ON devices(user_id, active)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_device_key_packages_available ON device_key_packages(device_id, consumed_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_device_link_sessions_code_hash ON device_link_sessions(code_hash)"),

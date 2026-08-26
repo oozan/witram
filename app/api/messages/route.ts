@@ -1,4 +1,5 @@
 import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceWriteSafety, safetyError } from "../_lib/safety";
 
 type StoredMessage = {
   id: string;
@@ -77,6 +78,10 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try {
+    await enforceWriteSafety({ userId: current.userId, scope: "messages-minute", restriction: "messages", endpoint: "/api/messages", limit: 45, windowSeconds: 60 });
+    await enforceWriteSafety({ userId: current.userId, scope: "messages-day", restriction: "messages", endpoint: "/api/messages", limit: 1_500, windowSeconds: 86_400 });
+  } catch (error) { return safetyError(error); }
   const db = database();
   const membership = await db.prepare(
     "SELECT 1 AS allowed FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1",

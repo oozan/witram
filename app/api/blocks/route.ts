@@ -1,4 +1,5 @@
 import { database, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceRateLimit, safetyError } from "../_lib/safety";
 
 export async function POST(request: Request) {
   return updateBlock(request, true);
@@ -23,6 +24,7 @@ async function updateBlock(request: Request, shouldBlock: boolean) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "block-actions", endpoint: "/api/blocks", limit: 40, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
   const db = database();
   if (!await db.prepare("SELECT 1 FROM users WHERE id = ? LIMIT 1").bind(userId).first()) return json({ error: "Account not found" }, { status: 404 });
   if (!shouldBlock) {

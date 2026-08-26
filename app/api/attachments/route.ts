@@ -1,5 +1,6 @@
 import { conversationMember, expirationFor, isMediaKind, isRetention, purgeExpiredAttachments, validateMediaSizes, validAttachmentId } from "../_lib/media";
 import { database, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceWriteSafety, safetyError } from "../_lib/safety";
 
 export async function POST(request: Request) {
   const current = identity(request);
@@ -17,6 +18,10 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try {
+    await enforceWriteSafety({ userId: current.userId, scope: "media-hour", restriction: "media", endpoint: "/api/attachments", limit: 30, windowSeconds: 3_600, cost: Math.ceil(Number(payload.plaintextSize) / 1_048_576), costLimit: 300 });
+    await enforceWriteSafety({ userId: current.userId, scope: "media-day", restriction: "media", endpoint: "/api/attachments", limit: 150, windowSeconds: 86_400, cost: Math.ceil(Number(payload.plaintextSize) / 1_048_576), costLimit: 1_500 });
+  } catch (error) { return safetyError(error); }
   await purgeExpiredAttachments();
   if (!await conversationMember(conversationId, current.userId)) return json({ error: "You are not a member of this conversation" }, { status: 403 });
 

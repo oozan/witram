@@ -1,4 +1,5 @@
 import { database, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceRateLimit, safetyError } from "../_lib/safety";
 
 function validBase64(value: unknown, maximum: number) {
   return typeof value === "string" && value.length >= 4 && value.length <= maximum && /^[A-Za-z0-9+/=]+$/.test(value);
@@ -28,6 +29,7 @@ export async function PUT(request: Request) {
   if (!sourceDeviceId || !validBase64(payload.ciphertext, 2_300_000) || decodedLength(payload.iv) !== 12 || decodedLength(payload.salt) !== 32 || payload.version !== 1) return json({ error: "A valid encrypted backup is required" }, { status: 400 });
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "backup-write", endpoint: "/api/backups", limit: 6, windowSeconds: 3_600, cost: Math.ceil(Number(request.headers.get("content-length") ?? 0) / 262_144), costLimit: 60 }); } catch (error) { return safetyError(error); }
   const db = database();
   if (!await db.prepare("SELECT 1 FROM devices WHERE id = ? AND user_id = ? AND active = '1' LIMIT 1").bind(sourceDeviceId, current.userId).first()) return json({ error: "An active source device is required" }, { status: 403 });
   const now = new Date().toISOString();

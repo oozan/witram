@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -198,6 +198,55 @@ export const attachments = sqliteTable(
     index("idx_attachments_conversation_status").on(table.conversationId, table.status),
     index("idx_attachments_expiry_status").on(table.expiresAt, table.status),
   ],
+);
+
+export const rateLimitBuckets = sqliteTable(
+  "rate_limit_buckets",
+  {
+    actorKey: text("actor_key").notNull(),
+    scope: text("scope").notNull(),
+    windowStart: integer("window_start").notNull(),
+    requestCount: integer("request_count").notNull().default(0),
+    cost: integer("cost").notNull().default(0),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.actorKey, table.scope, table.windowStart] }),
+    index("idx_rate_limit_buckets_expiry").on(table.expiresAt),
+  ],
+);
+
+export const securityEvents = sqliteTable(
+  "security_events",
+  {
+    id: text("id").primaryKey(),
+    actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
+    category: text("category").notNull(),
+    severity: text("severity", { enum: ["info", "warning", "critical"] }).notNull(),
+    endpoint: text("endpoint").notNull(),
+    metadata: text("metadata").notNull().default("{}"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_security_events_created_at").on(table.createdAt),
+    index("idx_security_events_category_created").on(table.category, table.createdAt),
+    index("idx_security_events_actor_created").on(table.actorId, table.createdAt),
+  ],
+);
+
+export const abuseRestrictions = sqliteTable(
+  "abuse_restrictions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    scope: text("scope", { enum: ["all", "messages", "media", "contacts"] }).notNull(),
+    reason: text("reason").notNull(),
+    createdBy: text("created_by").notNull(),
+    expiresAt: text("expires_at"),
+    revokedAt: text("revoked_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_abuse_restrictions_user_active").on(table.userId, table.revokedAt, table.expiresAt)],
 );
 
 export const mlsWelcomes = sqliteTable(

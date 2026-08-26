@@ -1,4 +1,5 @@
 import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceWriteSafety, safetyError } from "../_lib/safety";
 
 type StoredConversation = {
   id: string;
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceWriteSafety({ userId: current.userId, scope: "conversation-create", restriction: "contacts", endpoint: "/api/conversations", limit: 20, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
   const db = database();
   if (kind === "saved" && memberIds.length) return json({ error: "Saved conversations cannot contain other members" }, { status: 400 });
   if (kind === "direct" && memberIds.length !== 1) return json({ error: "Choose one accepted contact for a direct conversation" }, { status: 400 });
