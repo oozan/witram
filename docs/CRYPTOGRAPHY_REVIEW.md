@@ -21,6 +21,8 @@ This document gives an external cryptographer a precise starting point. It does 
 
 All randomness is requested through `crypto.getRandomValues` or Web Crypto key generation. Direct dependency versions are exact and the complete npm graph is locked by `package-lock.json`.
 
+The scheduled workflow runs CodeQL analysis without uploading SARIF because repository-level GitHub Code Scanning is not assumed to be enabled. The repository owner should enable that feature and remove `upload: false` when plan and policy permit centralized alert ingestion.
+
 ## Key lifecycle
 
 1. The first device creates a stable account signing key and a distinct device signing key.
