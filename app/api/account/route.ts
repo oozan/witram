@@ -1,4 +1,5 @@
 import { cleanDisplayName, database, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceRateLimit, safetyError } from "../_lib/safety";
 
 export async function GET(request: Request) {
   const current = identity(request);
@@ -36,6 +37,7 @@ export async function PATCH(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "profile-updates", endpoint: "/api/account", limit: 10, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
   await database().prepare("UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?")
     .bind(displayName, new Date().toISOString(), current.userId).run();
   return json({ account: { id: current.userId, email: current.email, displayName } });

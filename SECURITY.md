@@ -2,7 +2,7 @@
 
 ## Audit status
 
-Whisper 0.7 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2 and Web Crypto AES-GCM for media, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
+Whisper 0.8 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2 and Web Crypto AES-GCM for media, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
 
 ## Implemented protocol boundary
 
@@ -21,6 +21,9 @@ Whisper 0.7 is **not formally audited**. It uses the standardized MLS protocol f
 - Every uploaded media object receives a fresh random 256-bit AES-GCM key and 96-bit IV. Thumbnails use the same per-object key with a separately generated IV. Keys, IVs, filenames, and MIME types are carried inside encrypted message bodies rather than attachment metadata.
 - The R2 boundary accepts only `application/octet-stream` ciphertext with a size fixed at reservation time. D1 stores the conversation, owner, broad media kind, ciphertext sizes, state, and expiry required for authorization and retention.
 - Downloads require current conversation membership and use `no-store`; decryption, MIME restoration, playback, and file naming happen only in the browser.
+- Persistent rate-limit buckets constrain message, attachment bandwidth, contact, report, device, backup, MLS, profile, and external-provider abuse across worker instances.
+- Scoped, expiring abuse restrictions are enforced before high-risk writes. Security events and operations metrics contain bounded metadata and never message content or media keys.
+- The public health response contains only component readiness and timing. Detailed metrics and restriction actions require an explicit authenticated operator allowlist.
 
 The service still observes account identifiers, conversation membership, device identifiers, message and attachment timing and sizes, broad attachment kind, retention choice, and report metadata. End-to-end encryption does not hide this metadata.
 
@@ -36,6 +39,8 @@ The service still observes account identifiers, conversation membership, device 
 - Expired and abandoned media is removed opportunistically during attachment API activity. A scheduled production sweep or bucket lifecycle policy is still required to guarantee prompt deletion during periods with no traffic.
 - Web clients cannot reliably scan arbitrary encrypted uploads for malware. Type/signature validation is a safety boundary, not antivirus; downloaded files remain untrusted content.
 - Online Tenor results are provider-hosted URLs and are not covered by the encrypted upload pipeline. Users must attach a local GIF to receive encrypted R2 storage.
+- Critical webhook alerts are inactive until an operator configures and tests `ALERT_WEBHOOK_URL`; stored security events are not a substitute for a staffed incident-response process.
+- Infrastructure snapshot, point-in-time recovery, object replication/versioning, external uptime monitoring, alert routing, and recovery drills require operator configuration in the hosting and monitoring platforms. The repository provides a runbook but cannot guarantee those external controls are enabled.
 - Safety-number verification is local to a browser and is not automatically synchronized.
 - Server-side epoch ordering is intentionally not trusted; clients validate commits through MLS. Operational rate limits and abuse monitoring still need deployment-level configuration.
 

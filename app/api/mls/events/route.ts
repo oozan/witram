@@ -1,4 +1,5 @@
 import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../../_lib/social";
+import { enforceWriteSafety, safetyError } from "../../_lib/safety";
 
 type StoredEvent = { id: string; sender_device_id: string; kind: "commit"; payload: string; epoch: string; created_at: string };
 
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
   if (!conversationId || !senderDeviceId || !eventPayload || !Number.isSafeInteger(epoch) || epoch < 1 || payload.kind !== "commit") return json({ error: "A valid MLS commit is required" }, { status: 400 });
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceWriteSafety({ userId: current.userId, scope: "mls-commits", restriction: "messages", endpoint: "/api/mls/events", limit: 120, windowSeconds: 3_600, cost: Math.ceil(Number(request.headers.get("content-length") ?? 0) / 16_384), costLimit: 600 }); } catch (error) { return safetyError(error); }
   const db = database();
   if (!await db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1").bind(conversationId, current.userId).first()) return json({ error: "Conversation membership is required" }, { status: 403 });
   if (!await db.prepare("SELECT 1 FROM devices WHERE id = ? AND user_id = ? AND active = '1' LIMIT 1").bind(senderDeviceId, current.userId).first()) return json({ error: "Sender device is not active" }, { status: 403 });

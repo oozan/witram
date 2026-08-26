@@ -1,4 +1,5 @@
 import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../../_lib/social";
+import { enforceWriteSafety, safetyError } from "../../_lib/safety";
 
 type StoredWelcome = { id: string; conversation_id: string; sender_device_id: string; recipient_key_package_version: string; welcome: string; ratchet_tree: string; created_at: string };
 
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceWriteSafety({ userId: current.userId, scope: "mls-welcomes", restriction: "messages", endpoint: "/api/mls/welcomes", limit: 120, windowSeconds: 3_600, cost: Math.ceil(Number(request.headers.get("content-length") ?? 0) / 16_384), costLimit: 900 }); } catch (error) { return safetyError(error); }
   const db = database();
   if (!await db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1").bind(conversationId, current.userId).first()) return json({ error: "Conversation membership is required" }, { status: 403 });
   if (!await db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1").bind(conversationId, recipientUserId).first()) return json({ error: "Recipient is not a conversation member" }, { status: 403 });

@@ -1,0 +1,17 @@
+.page { min-height: 100dvh; padding: 48px 20px; background: radial-gradient(circle at 12% 8%, #dff3eb 0, transparent 32%), #f4f6f4; color: #1d2c27; }
+.document { width: min(100%, 820px); margin: 0 auto; padding: 44px 52px; border: 1px solid #dce5e1; border-radius: 24px; background: rgba(255,255,255,.96); box-shadow: 0 24px 70px rgba(20,50,40,.1); }
+.brand { display: inline-flex; gap: 8px; align-items: center; color: #176b55; font-size: 14px; font-weight: 850; text-decoration: none; }
+.brand span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: #e4f3ed; font-size: 18px; }
+.document header > p { margin: 32px 0 8px; color: #71807a; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.document h1 { margin: 0 0 14px; font-size: clamp(32px, 6vw, 48px); letter-spacing: -1.8px; }
+.document header > strong { display: block; max-width: 650px; color: #53635d; font-size: 15px; font-weight: 550; line-height: 1.65; }
+.content { margin-top: 38px; }
+.content section { padding: 24px 0; border-top: 1px solid #e5ebe8; }
+.content h2 { margin: 0 0 10px; font-size: 18px; }
+.content p, .content li { color: #52615c; font-size: 13px; line-height: 1.75; }
+.content p { margin: 8px 0; }
+.content ul { margin: 10px 0 0; padding-left: 20px; }
+.content strong { color: #263b34; }
+.document footer { display: flex; margin-top: 30px; padding-top: 22px; gap: 9px; border-top: 1px solid #e5ebe8; color: #8a9691; font-size: 11px; }
+.document footer a { color: #176b55; font-weight: 750; text-decoration: none; }
+@media (max-width: 620px) { .page { padding: 0; } .document { min-height: 100dvh; padding: 30px 22px; border: 0; border-radius: 0; } }

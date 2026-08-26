@@ -36,6 +36,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .auth-card > a { display: block; padding: 14px 20px; border-radius: 13px; background: var(--green); color: #fff; font-size: 14px; font-weight: 850; text-decoration: none; }
 .auth-card > a:hover { background: var(--green-deep); }
 .auth-card small { display: block; margin-top: 18px; color: #89938f; font-size: 10px; line-height: 1.5; }
+.auth-legal-links { display: flex; margin-top: 14px; gap: 14px; justify-content: center; }
+.auth-legal-links a { color: var(--green-deep); font-size: 10px; font-weight: 750; text-decoration: none; }
 
 .app-shell {
   display: flex;
@@ -174,6 +176,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .privacy-footer { position: absolute; right: 0; bottom: 0; left: 0; padding: 15px; border-top: 1px solid #eff1f0; background: rgba(255,255,255,.96); color: #98a09d; font-size: 10px; text-align: center; }
 .privacy-footer span { color: var(--green); font-size: 14px; }
 .privacy-footer button { margin-left: 8px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
+.privacy-footer a { margin-left: 8px; color: var(--green-deep); font-weight: 700; text-decoration: none; }
 .archive-chat-action { width: 100%; margin: 12px 0; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font-weight: 700; cursor: pointer; }
 .archive-chat-action:hover { border-color: var(--green); color: var(--green-deep); }
 .export-chat-action { margin-top: 0; }
@@ -472,6 +475,8 @@ button.person-row:hover { border-color: #aacfc3; background: #f5faf8; }
 .pending-list > span { color: var(--muted); font-size: 10px; }
 .blocked-list > div { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 10px; }
 .sign-out-link { display: block; margin-top: 20px; color: #9b4e47; font-size: 10px; font-weight: 800; text-align: center; text-decoration: none; }
+.account-legal-links { display: flex; margin-top: 12px; gap: 12px; justify-content: center; }
+.account-legal-links a { color: var(--green-deep); font-size: 9px; font-weight: 750; text-decoration: none; }
 .trust-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 12px 0; }
 .trust-actions button { padding: 10px; border: 1px solid #ead5d2; border-radius: 10px; background: #fff8f7; color: #9b4e47; font-size: 10px; font-weight: 800; cursor: pointer; }
 .report-modal select, .report-modal textarea { width: 100%; margin-bottom: 14px; padding: 11px 13px; border: 1px solid #dce3df; border-radius: 12px; background: #f8faf9; color: var(--ink); }

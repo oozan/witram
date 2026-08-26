@@ -1,4 +1,5 @@
 import { database, identity, initializeDatabase, json, registerIdentity } from "../../_lib/social";
+import { enforceRateLimit, safetyError } from "../../_lib/safety";
 
 type StoredLink = {
   id: string;
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "device-link-create", endpoint: "/api/devices/links", limit: 12, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
   const db = database();
   const now = new Date();
   await db.prepare("UPDATE device_link_sessions SET status = 'cancelled', updated_at = ? WHERE user_id = ? AND status IN ('pending', 'confirming') AND expires_at <= ?").bind(now.toISOString(), current.userId, now.toISOString()).run();
@@ -87,6 +89,7 @@ export async function PATCH(request: Request) {
   const action = payload.action;
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "device-link-actions", endpoint: "/api/devices/links", limit: 60, windowSeconds: 3_600, cost: Math.ceil(Number(request.headers.get("content-length") ?? 0) / 65_536), costLimit: 100 }); } catch (error) { return safetyError(error); }
   const db = database();
   const now = new Date().toISOString();
   const link = await db.prepare("SELECT id, code_hash, requester_name, requester_public_key, approver_public_key, encrypted_transfer, transfer_iv, status, expires_at, created_at FROM device_link_sessions WHERE id = ? AND user_id = ? LIMIT 1").bind(linkId, current.userId).first<StoredLink>();

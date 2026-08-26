@@ -2,9 +2,9 @@
 
 Whisper is a responsive Telegram-inspired chat application with client-side encryption and durable ciphertext storage.
 
-## 0.7 milestone
+## 0.8 milestone
 
-The 0.7 release adds encrypted media: originals and thumbnails are protected in the browser with a fresh AES-256-GCM key before R2 upload, and that key travels only inside the existing end-to-end encrypted message. It supports images, local GIFs, video, voice/audio, files, membership-authorized retrieval, explicit deletion, and 1-day, 7-day, 30-day, or manual retention.
+The 0.8 release adds the production-safety control plane: persistent per-account and privacy-preserving network rate limits, bandwidth quotas, scoped abuse restrictions, security-event recording, health checks, restricted operational metrics, optional critical-event webhooks, public legal pages, and a tested backup/disaster-recovery runbook.
 
 ## What works
 
@@ -68,6 +68,13 @@ The 0.7 release adds encrypted media: originals and thumbnails are protected in 
 - R2 ciphertext storage with D1 ownership, membership, upload-state, and expiry metadata
 - On-demand client decryption for previews, playback, and downloads
 - Per-upload retention controls plus immediate encrypted-object deletion when the sender deletes a message
+- Durable request and bandwidth limits for messages, media, invitations, reports, device/MLS operations, backups, profiles, and external GIF search
+- Expiring account restrictions scoped to all writes, messages, media, or contacts
+- Security-event records that deliberately exclude message content, media keys, filenames, and report narratives
+- Database and object-storage health checks plus allowlisted operational metrics
+- Optional HTTPS webhook alerts for critical service failures
+- Public Privacy Policy and Terms of Service linked from sign-in and account surfaces
+- Backup, quarterly recovery-drill, incident-response, and release procedures
 
 ## Run locally
 
@@ -116,6 +123,9 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `app/api/conversations/route.ts` — durable user-owned conversation API
 - `app/api/messages/route.ts` — membership-protected ciphertext-only message API
 - `app/api/attachments/` — authorized R2 ciphertext upload, retrieval, finalization, retention, and deletion
+- `app/api/_lib/safety.ts` — persistent rate limits, restrictions, events, and alert delivery
+- `app/api/health/route.ts` — minimal database and object-storage readiness check
+- `app/api/operations/route.ts` — allowlisted safety metrics and restriction management
 - `app/api/account/route.ts` — profile registration and updates
 - `app/api/contacts/route.ts` — invitations and accepted contacts
 - `app/api/blocks/route.ts` — contact blocking and unblocking
@@ -123,3 +133,4 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `db/schema.ts` — relational data model
 - `drizzle/` — generated D1 migration
 - `.openai/hosting.json` — deployment bindings
+- `docs/OPERATIONS.md` — monitoring, abuse response, backup, disaster recovery, and release runbook

@@ -1,4 +1,5 @@
 import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
+import { enforceRateLimit, safetyError } from "../_lib/safety";
 
 type StoredDevice = {
   id: string;
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
 
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "device-key-publish", endpoint: "/api/keys", limit: 60, windowSeconds: 3_600, cost: Math.ceil(Number(request.headers.get("content-length") ?? 0) / 16_384), costLimit: 180 }); } catch (error) { return safetyError(error); }
   const db = database();
   const storedUser = await db.prepare("SELECT identity_public_key FROM users WHERE id = ? LIMIT 1").bind(current.userId).first<{ identity_public_key: string | null }>();
   const storedUserKey = storedUser?.identity_public_key ? decodeBase64(storedUser.identity_public_key, 128) : null;
@@ -171,6 +173,7 @@ export async function DELETE(request: Request) {
   if (!deviceId || !timestamp || !signature || Math.abs(Date.now() - new Date(timestamp).getTime()) > 5 * 60_000) return json({ error: "A recent signed revocation is required" }, { status: 400 });
   await initializeDatabase();
   await registerIdentity(current);
+  try { await enforceRateLimit({ actorKey: `user:${current.userId}`, actorId: current.userId, scope: "device-revocations", endpoint: "/api/keys", limit: 20, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
   const db = database();
   const user = await db.prepare("SELECT identity_public_key FROM users WHERE id = ? LIMIT 1").bind(current.userId).first<{ identity_public_key: string | null }>();
   const userPublic = user?.identity_public_key ? decodeBase64(user.identity_public_key, 128) : null;
