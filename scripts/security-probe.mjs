@@ -22,7 +22,7 @@ async function probe(name, path, verify) {
   const started = performance.now();
   try {
     const response = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(10_000) });
-    const body = (await response.text()).slice(0, 2_048);
+    const body = (await response.text()).slice(0, 65_536);
     const finding = verify(response, body);
     results.push({ name, path, status: response.status, durationMs: Math.round(performance.now() - started), ...finding });
   } catch (error) {
