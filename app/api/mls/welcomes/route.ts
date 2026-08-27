@@ -8,8 +8,8 @@ function validBase64(value: unknown, maximum: number) {
 }
 
 export async function GET(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   const url = new URL(request.url);
   const conversationId = url.searchParams.get("conversationId")?.trim();
   const deviceId = url.searchParams.get("deviceId")?.trim();
@@ -28,8 +28,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 500_000) return json({ error: "Request body is too large" }, { status: 413 });
   let payload: Record<string, unknown>;
   try {
@@ -68,8 +68,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   let payload: { welcomeId?: unknown; deviceId?: unknown };
   try {
     payload = await request.json() as typeof payload;

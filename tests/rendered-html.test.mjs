@@ -22,8 +22,10 @@ test("server-renders the Whisper sign-in boundary for anonymous visitors", async
   const html = await response.text();
   assert.match(html, /<title>Whisper — Private conversations<\/title>/i);
   assert.match(html, /Welcome to Whisper/);
-  assert.match(html, /Sign in with ChatGPT/);
-  assert.match(html, /never asks for or stores your password/);
+  assert.match(html, /Sign in with email/);
+  assert.match(html, /Continue with Google/);
+  assert.match(html, /protected password hash/);
+  assert.doesNotMatch(html, /ChatGPT/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 
@@ -74,9 +76,10 @@ test("keeps drafts device-local and provides in-chat search", async () => {
 });
 
 test("enforces authenticated accounts, contacts, membership, blocks, and reports", async () => {
-  const [page, social, contacts, blocks, reports, conversations, messages, schema, migration, client] = await Promise.all([
+  const [page, social, authServer, contacts, blocks, reports, conversations, messages, schema, migration, client] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/_lib/social.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/auth-server.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/contacts/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/blocks/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/reports/route.ts", import.meta.url), "utf8"),
@@ -87,10 +90,10 @@ test("enforces authenticated accounts, contacts, membership, blocks, and reports
     readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /getChatGPTUser/);
-  assert.match(page, /chatGPTSignInPath/);
-  assert.match(social, /oai-authenticated-user-id/);
-  assert.match(social, /oai-authenticated-user-email/);
+  assert.match(page, /AuthGate/);
+  assert.match(authServer, /__Host-whisper_session/);
+  assert.match(social, /sessionIdentity/);
+  assert.doesNotMatch(social, /oai-authenticated|ChatGPT/);
   assert.doesNotMatch(social, /x-whisper-device-id/);
   assert.match(contacts, /INSERT OR IGNORE INTO contacts/);
   assert.match(contacts, /status = 'accepted'/);

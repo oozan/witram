@@ -1,13 +1,13 @@
 import { database, identity, initializeDatabase, json } from "../_lib/social";
 import { enforceRateLimit, isOperationsAdmin, recordSecurityEvent, safetyError } from "../_lib/safety";
 
-function authorize(request: Request) {
-  const current = identity(request);
+async function authorize(request: Request) {
+  const current = await identity(request);
   return current && isOperationsAdmin(current.userId) ? current : null;
 }
 
 export async function GET(request: Request) {
-  const current = authorize(request);
+  const current = await authorize(request);
   if (!current) return json({ error: "Not found" }, { status: 404 });
   await initializeDatabase();
   try { await enforceRateLimit({ actorKey: `ops:${current.userId}`, actorId: current.userId, scope: "operations-read", endpoint: "/api/operations", limit: 60, windowSeconds: 3600 }); } catch (error) { return safetyError(error); }
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const current = authorize(request);
+  const current = await authorize(request);
   if (!current) return json({ error: "Not found" }, { status: 404 });
   if (Number(request.headers.get("content-length") ?? 0) > 4_000) return json({ error: "Request body is too large" }, { status: 413 });
   let payload: { action?: unknown; userId?: unknown; scope?: unknown; durationHours?: unknown; reason?: unknown };

@@ -36,8 +36,8 @@ async function importEd25519(publicKey: Uint8Array) {
 }
 
 export async function GET(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   const requestedUserId = new URL(request.url).searchParams.get("userId")?.trim() || current.userId;
 
   await initializeDatabase();
@@ -80,8 +80,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 180_000) return json({ error: "Request body is too large" }, { status: 413 });
   let payload: Record<string, unknown>;
   try {
@@ -159,8 +159,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   let payload: { deviceId?: unknown; timestamp?: unknown; signature?: unknown };
   try {
     payload = await request.json() as typeof payload;

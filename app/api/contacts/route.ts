@@ -5,8 +5,8 @@ type StoredContact = { id: string; email: string; display_name: string | null; c
 type StoredInvitation = { id: string; user_id: string; email: string; display_name: string | null; created_at: string };
 
 export async function GET(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   await initializeDatabase();
   await registerIdentity(current);
 
@@ -45,8 +45,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 2_000) return json({ error: "Request body is too large" }, { status: 413 });
 
   let payload: { email?: unknown };
@@ -84,8 +84,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 2_000) return json({ error: "Request body is too large" }, { status: 413 });
 
   let payload: { invitationId?: unknown; action?: unknown };

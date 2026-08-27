@@ -2,12 +2,15 @@
 
 ## Audit status
 
-Whisper 0.9 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2 and Web Crypto AES-GCM for media, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
+Whisper 0.10 is **not formally audited**. It uses the standardized MLS protocol from RFC 9420 through `ts-mls` 1.6.2 and Web Crypto AES-GCM for media, but neither this integration nor the upstream TypeScript implementation should be represented as independently audited. Do not use this release for high-risk or life-safety communications.
 
 The repository now contains a maintainer-reviewed threat model, cryptographic review dossier, authorization-gated passive probe, scheduled dependency/CodeQL review workflow, and incident-response plan. They make an independent assessment reproducible; they do not make the maintainer independent from the implementation. See `docs/THREAT_MODEL.md`, `docs/CRYPTOGRAPHY_REVIEW.md`, `docs/PENETRATION_TEST_PLAN.md`, and `docs/INCIDENT_RESPONSE.md`.
 
 ## Implemented protocol boundary
 
+- Email accounts require address verification before credential creation. Passwords use unique salts and PBKDF2-HMAC-SHA-256 at 600,000 iterations; plaintext passwords are never retained.
+- App sessions use random opaque tokens, store only SHA-256 token hashes in D1, rotate at every login, expire after 30 days, and are sent only through Secure, HttpOnly, SameSite=Lax cookies.
+- Optional Google sign-in uses Authorization Code with PKCE S256, one-time state bound to the browser, an OpenID Connect nonce, exact callback matching, and Google signing-key/issuer/audience/expiry/email verification.
 - Each account creates an Ed25519 identity key. Its non-exportable private key stays in IndexedDB.
 - Each browser device creates a distinct Ed25519 identity key signed by the account key.
 - Each device publishes a versioned MLS key package signed by its device key.
@@ -45,6 +48,7 @@ The service still observes account identifiers, conversation membership, device 
 - Infrastructure snapshot, point-in-time recovery, object replication/versioning, external uptime monitoring, alert routing, and recovery drills require operator configuration in the hosting and monitoring platforms. The repository provides a runbook but cannot guarantee those external controls are enabled.
 - Automated scanning finds known and modeled classes of weakness but is not a substitute for manual protocol review, adversarial penetration testing, browser/runtime review, or deployment/IAM inspection.
 - Safety-number verification is local to a browser and is not automatically synchronized.
+- Password reset, breached-password screening, a user-visible active-session list, global session revocation, and MFA are not yet implemented.
 - Server-side epoch ordering is intentionally not trusted; clients validate commits through MLS. Operational rate limits and abuse monitoring still need deployment-level configuration.
 
 ## Review checklist before production

@@ -3,8 +3,8 @@ import { database, identity, initializeDatabase, json, registerIdentity } from "
 import { enforceWriteSafety, safetyError } from "../_lib/safety";
 
 export async function POST(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 8_000) return json({ error: "Request body is too large" }, { status: 413 });
 
   let payload: { conversationId?: string; kind?: unknown; plaintextSize?: unknown; ciphertextSize?: unknown; thumbnailCiphertextSize?: unknown; retention?: unknown };
@@ -39,8 +39,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   let payload: { id?: unknown };
   try { payload = await request.json() as typeof payload; } catch { return json({ error: "A JSON request body is required" }, { status: 400 }); }
   if (!validAttachmentId(payload.id)) return json({ error: "A valid attachment id is required" }, { status: 400 });

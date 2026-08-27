@@ -2,13 +2,16 @@
 
 Whisper is a responsive Telegram-inspired chat application with client-side encryption and durable ciphertext storage.
 
-## 0.9 milestone
+## 0.10 milestone
 
-The 0.9 release makes security review repeatable and externally reviewable: a formal threat register, cryptographic implementation dossier, authorization-gated passive penetration probe, scheduled npm/CodeQL/dependency scans, Dependabot coverage, an incident-response plan, and a public review-status page. These are review-readiness controls; an independent audit and penetration test are still pending.
+The 0.10 release adds app-owned email accounts and optional Google OpenID Connect. Registration requires an emailed one-time code; passwords are stored only as salted PBKDF2-HMAC-SHA-256 hashes; opaque sessions are stored hashed in D1 and delivered through secure HttpOnly cookies. Platform identity headers are not trusted for application authentication.
 
 ## What works
 
-- ChatGPT-backed registration and sign-in without app-owned passwords
+- Email registration with one-time-code address verification
+- Email/password sign-in with generic failures and persistent rate limiting
+- Optional Google OpenID Connect with Authorization Code, PKCE, state, and nonce validation
+- Hashed, revocable D1 sessions in secure HttpOnly cookies
 - Durable user profiles with editable display names
 - Contact invitations between registered Whisper accounts
 - Accept and decline workflows with symmetric contact records
@@ -60,7 +63,7 @@ The 0.9 release makes security review repeatable and externally reviewable: a fo
 - Cloudflare D1 persistence containing ciphertext and IVs, never message plaintext
 - Server-side conversation membership checks
 - Payload size limits, no-store API responses, and baseline browser security headers
-- ChatGPT/Sites identity headers enforced by every account and chat API
+- App-owned session identity enforced by every account and chat API
 - Generated and versioned database migrations
 - Client-side encrypted image, local GIF, video, audio, voice-message, and file uploads
 - Separately encrypted WebP thumbnails for image, GIF, and video previews
@@ -93,6 +96,10 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+### Authentication setup
+
+Email delivery uses Resend and Google sign-in uses Google OpenID Connect. Copy `.env.example` to `.env.local`, generate `AUTH_SECRET`, configure a verified Resend sender, and optionally add the Google web-client credentials. The complete production checklist and exact callback URL are in [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md).
 
 ### Online GIF search
 
@@ -130,6 +137,8 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `app/api/messages/route.ts` — membership-protected ciphertext-only message API
 - `app/api/attachments/` — authorized R2 ciphertext upload, retrieval, finalization, retention, and deletion
 - `app/api/_lib/safety.ts` — persistent rate limits, restrictions, events, and alert delivery
+- `app/api/_lib/auth.ts` — password hashing, verification codes, sessions, cookies, and Google token validation
+- `app/api/auth/` — email registration, verification, sign-in, sign-out, and Google OIDC routes
 - `app/api/health/route.ts` — minimal database and object-storage readiness check
 - `app/api/operations/route.ts` — allowlisted safety metrics and restriction management
 - `app/api/account/route.ts` — profile registration and updates

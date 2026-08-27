@@ -11,8 +11,8 @@ function decodedLength(value: unknown) {
 }
 
 export async function GET(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   await initializeDatabase();
   await registerIdentity(current);
   const backup = await database().prepare("SELECT ciphertext, iv, salt, version, source_device_id, created_at, updated_at FROM encrypted_backups WHERE user_id = ? LIMIT 1").bind(current.userId).first<{ ciphertext: string; iv: string; salt: string; version: string; source_device_id: string | null; created_at: string; updated_at: string }>();
@@ -20,8 +20,8 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 2_500_000) return json({ error: "Encrypted backup is too large" }, { status: 413 });
   let payload: Record<string, unknown>;
   try { payload = await request.json() as Record<string, unknown>; } catch { return json({ error: "A JSON request body is required" }, { status: 400 }); }
@@ -41,8 +41,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   await initializeDatabase();
   await registerIdentity(current);
   await database().prepare("DELETE FROM encrypted_backups WHERE user_id = ?").bind(current.userId).run();

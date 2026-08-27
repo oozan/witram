@@ -1849,7 +1849,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               {!!social.outgoing.length && <div className="pending-list"><strong>Pending invitations</strong>{social.outgoing.map((invitation) => <span key={invitation.id}>{invitation.person.displayName} · waiting</span>)}</div>}
               {!!social.blocked.length && <div className="blocked-list"><strong>Blocked accounts</strong>{social.blocked.map((person) => <div key={person.id}><span>{person.displayName}</span><button onClick={() => void setBlocked(person.id, false)}>Unblock</button></div>)}</div>}
             </section>
-            <a className="sign-out-link" href="/signout-with-chatgpt?return_to=%2F">Sign out of Whisper</a>
+            <button className="sign-out-link" type="button" onClick={() => void fetch("/api/auth/logout", { method: "POST" }).then(() => { window.location.href = "/"; })}>Sign out of Whisper</button>
             <nav className="account-legal-links" aria-label="Legal"><a href="/security">Security status</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></nav>
           </section>
         </div>

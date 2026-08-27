@@ -18,8 +18,8 @@ function isValidEncryptedField(value: unknown, maximum: number) {
 }
 
 export async function GET(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
 
   const conversationId = new URL(request.url).searchParams.get("conversationId")?.trim();
   if (!conversationId || !/^[a-z0-9-]{1,80}$/i.test(conversationId)) return json({ error: "A valid conversationId is required" }, { status: 400 });
@@ -53,8 +53,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > 350_000) return json({ error: "Request body is too large" }, { status: 413 });

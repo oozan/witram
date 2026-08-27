@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { sessionIdentity } from "./auth";
 
 export type AuthenticatedIdentity = {
   userId: string;
@@ -19,22 +20,10 @@ export function mediaBucket() {
   return bucket;
 }
 
-export function identity(request: Request): AuthenticatedIdentity | null {
-  const userId = request.headers.get("oai-authenticated-user-id")?.trim();
-  const email = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
-  if (!userId || !email) return null;
-
-  const encodedName = request.headers.get("oai-authenticated-user-full-name");
-  const encoding = request.headers.get("oai-authenticated-user-full-name-encoding");
-  let displayName = email.split("@")[0];
-  if (encodedName && encoding === "percent-encoded-utf-8") {
-    try {
-      displayName = decodeURIComponent(encodedName).trim() || displayName;
-    } catch {
-      // The authenticated email remains a safe display fallback.
-    }
-  }
-  return { userId, email, displayName };
+export async function identity(request: Request): Promise<AuthenticatedIdentity | null> {
+  if (!(request.headers.get("cookie") ?? "").includes("__Host-whisper_session=")) return null;
+  await initializeDatabase();
+  return sessionIdentity(database(), request);
 }
 
 export function json(data: unknown, init?: ResponseInit) {
@@ -57,6 +46,50 @@ export async function initializeDatabase() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)"),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_credentials (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      password_iterations INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TEXT NOT NULL,
+      user_agent_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_oauth_accounts (
+      provider TEXT NOT NULL,
+      provider_account_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (provider, provider_account_id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_oauth_states (
+      state_hash TEXT PRIMARY KEY,
+      code_verifier TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      return_to TEXT NOT NULL DEFAULT '/',
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_email_challenges (
+      challenge_hash TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      password_iterations INTEGER NOT NULL,
+      code_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS devices (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -226,6 +259,9 @@ export async function initializeDatabase() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_expires ON auth_sessions(user_id, expires_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_oauth_accounts_user ON auth_oauth_accounts(user_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_email_challenges_email ON auth_email_challenges(email, expires_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_object_key ON attachments(object_key)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_attachments_conversation_status ON attachments(conversation_id, status)"),

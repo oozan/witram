@@ -4,8 +4,8 @@ import { database, identity, initializeDatabase, json, mediaBucket } from "../..
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PUT(request: Request, context: RouteContext) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   const { id } = await context.params;
   if (!validAttachmentId(id)) return json({ error: "A valid attachment id is required" }, { status: 400 });
   const part = new URL(request.url).searchParams.get("part");
@@ -28,8 +28,8 @@ export async function PUT(request: Request, context: RouteContext) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   const { id } = await context.params;
   if (!validAttachmentId(id)) return json({ error: "A valid attachment id is required" }, { status: 400 });
   const part = new URL(request.url).searchParams.get("part") === "thumbnail" ? "thumbnail" : "original";
@@ -56,8 +56,8 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   const { id } = await context.params;
   if (!validAttachmentId(id)) return json({ error: "A valid attachment id is required" }, { status: 400 });
   await initializeDatabase();

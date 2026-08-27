@@ -10,8 +10,8 @@ export async function DELETE(request: Request) {
 }
 
 async function updateBlock(request: Request, shouldBlock: boolean) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 2_000) return json({ error: "Request body is too large" }, { status: 413 });
   let payload: { userId?: unknown };
   try {

@@ -1,10 +1,10 @@
 # Whisper threat model
 
-**Model version:** 1.0 (Whisper 0.9)  
+**Model version:** 1.1 (Whisper 0.10)
 **Review date:** August 26, 2026  
 **Status:** Maintainer-reviewed; independent review pending
 
-This model describes the deployed web client, Cloudflare Worker, D1 database, R2 ciphertext store, ChatGPT/Sites identity boundary, optional Tenor search, and operator integrations. It is a living engineering artifact, not a third-party security certification.
+This model describes the deployed web client, Cloudflare Worker, D1 database, R2 ciphertext store, app-owned email/session boundary, optional Google OpenID Connect and Tenor search, and operator integrations. It is a living engineering artifact, not a third-party security certification.
 
 ## Security objectives
 
@@ -68,7 +68,11 @@ The model assumes standards-compliant Web Crypto, secure randomness, correct TLS
 | MED-02 | Malformed or harmful decrypted file | Client allowlists, signatures, size caps, inert ciphertext storage | Validation is not antivirus; recipient must treat downloads as untrusted |
 | AUTHZ-01 | IDOR across conversations, attachments, backups, or links | Authenticated account and membership/ownership checks on every API | Penetration test each verb, object state, removed member, and guessed identifier |
 | WEB-01 | XSS reads keys/plaintext | React escaping, no raw message HTML, safe URL handling, MIME restoration after download | No strict CSP yet; review every URL/object-URL sink and third-party script path |
-| WEB-02 | CSRF or cross-origin state change | Same-origin fetches, JSON content types, Sites identity boundary, browser protections | Validate Origin/Sec-Fetch behavior and add explicit origin enforcement if dispatcher does not |
+| WEB-02 | CSRF or cross-origin state change | Explicit Origin/Sec-Fetch checks on auth writes, SameSite cookies, same-origin JSON fetches | Extend explicit Origin enforcement to every mutating endpoint during independent review |
+| AUTH-01 | Password database theft or offline cracking | Unique 128-bit salts and PBKDF2-HMAC-SHA-256 with 600,000 iterations; plaintext passwords are never stored | Password strength still depends on the user; add breached-password screening after privacy review |
+| AUTH-02 | Session theft, fixation, or database disclosure | 256-bit opaque tokens, only token hashes in D1, Secure HttpOnly SameSite=Lax cookies, rotation at every login, logout revocation, 30-day expiry | Add a user-visible session list and global revocation control |
+| AUTH-03 | Verification-code guessing or replay | Eight-digit codes, secret-keyed HMAC storage, five attempts, short expiry, one-time consumption, persistent rate limits | Email account compromise remains an account takeover path |
+| AUTH-04 | OAuth login CSRF, code interception, or forged Google identity | One-time state tied to an HttpOnly cookie, PKCE S256, nonce, exact redirect URI, RS256 JWKS verification, issuer/audience/expiry/email verification checks | Google availability and account security remain external dependencies |
 | META-01 | Traffic analysis or metadata exposure | Minimized schema, bounded ops output, no content in events/webhooks | Service necessarily observes membership, time, size, IP-derived buckets, broad media kind |
 | ABUSE-01 | Spam, brute force, or storage exhaustion | Persistent request/bandwidth buckets, restrictions, quotas, retention | Distributed low-rate abuse and new network identities remain possible; tune using production metrics |
 | OPS-01 | Operator credential abuse | Explicit allowlist, bounded API, security-event log | External IAM, two-person change control, audit retention, and access reviews require operator setup |

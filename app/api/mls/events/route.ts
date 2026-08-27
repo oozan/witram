@@ -4,8 +4,8 @@ import { enforceWriteSafety, safetyError } from "../../_lib/safety";
 type StoredEvent = { id: string; sender_device_id: string; kind: "commit"; payload: string; epoch: string; created_at: string };
 
 export async function GET(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   const url = new URL(request.url);
   const conversationId = url.searchParams.get("conversationId")?.trim();
   const after = url.searchParams.get("after")?.trim();
@@ -21,8 +21,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const current = identity(request);
-  if (!current) return json({ error: "Sign in with ChatGPT to continue" }, { status: 401 });
+  const current = await identity(request);
+  if (!current) return json({ error: "Sign in to continue" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 300_000) return json({ error: "Request body is too large" }, { status: 413 });
   let payload: Record<string, unknown>;
   try {
