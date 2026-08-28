@@ -33,7 +33,19 @@ export function json(data: unknown, init?: ResponseInit) {
   return Response.json(data, { ...init, headers });
 }
 
+let initialization: Promise<void> | null = null;
+
 export async function initializeDatabase() {
+  initialization ??= initializeDatabaseOnce();
+  try {
+    await initialization;
+  } catch (error) {
+    initialization = null;
+    throw error;
+  }
+}
+
+async function initializeDatabaseOnce() {
   const db = database();
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS users (
@@ -284,6 +296,26 @@ export async function initializeDatabase() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_blocks_blocked_id ON blocks(blocked_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_reports_reported_user_status ON reports(reported_user_id, status)"),
   ]);
+
+  // Local Miniflare databases can predate generated migrations. Upgrade the
+  // original users table without deleting accounts or encrypted chat data.
+  const columns = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
+  const names = new Set((columns.results ?? []).map((column) => column.name));
+  const additions = [
+    ["display_name", "ALTER TABLE users ADD COLUMN display_name TEXT"],
+    ["identity_public_key", "ALTER TABLE users ADD COLUMN identity_public_key TEXT"],
+    ["updated_at", "ALTER TABLE users ADD COLUMN updated_at TEXT"],
+  ] as const;
+  for (const [name, statement] of additions) {
+    if (names.has(name)) continue;
+    try {
+      await db.prepare(statement).run();
+    } catch (error) {
+      const current = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
+      if (!(current.results ?? []).some((column) => column.name === name)) throw error;
+    }
+  }
+  await db.prepare("UPDATE users SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL").run();
 }
 
 export async function registerIdentity(current: AuthenticatedIdentity) {
