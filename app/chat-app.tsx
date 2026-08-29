@@ -342,7 +342,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [messageMenuTarget, setMessageMenuTarget] = useState<Message["id"] | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ id: Message["id"]; originalText: string; previousDraft: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [compactMode, setCompactMode] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
@@ -502,7 +502,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     const timer = window.setTimeout(() => {
       const stored = localStorage.getItem(`whisper-draft:${initialChats[0].id}`);
       if (stored) setDraft(stored);
-      if (localStorage.getItem("whisper-theme") === "dark") setTheme("dark");
+      const savedTheme = localStorage.getItem("whisper-theme");
+      if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
       setCompactMode(localStorage.getItem("whisper-density") === "compact");
       setReducedMotion(localStorage.getItem("whisper-reduced-motion") === "true");
       setChats((current) => current.map(withChatPreferences));
