@@ -903,3 +903,72 @@ button:active { transform: scale(.97); }
   .classified-empty { width: calc(100% - 36px); }
   .classified-orbit { width: 88px; height: 88px; margin-bottom: 22px; }
 }
+
+/* Persistent interface palettes. Black Card remains the default. */
+.palette-gold { --accent: #d0ae71; --accent-bright: #e2c58f; --accent-deep: #8e713e; --accent-rgb: 208 174 113; --accent-ink: #100f0c; }
+.palette-emerald { --accent: #52d9a5; --accent-bright: #82efc4; --accent-deep: #24795c; --accent-rgb: 82 217 165; --accent-ink: #06130e; --signal-cyan: #75f5c8; }
+.palette-sapphire { --accent: #5d9dff; --accent-bright: #8ab8ff; --accent-deep: #315ca8; --accent-rgb: 93 157 255; --accent-ink: #07101f; --signal-cyan: #65dff4; }
+.palette-crimson { --accent: #ed596b; --accent-bright: #ff8996; --accent-deep: #973442; --accent-rgb: 237 89 107; --accent-ink: #1a0609; --signal-cyan: #ff8795; }
+.palette-amethyst { --accent: #a47aff; --accent-bright: #c1a3ff; --accent-deep: #6746b1; --accent-rgb: 164 122 255; --accent-ink: #10091d; --signal-cyan: #aee7ff; }
+
+.theme-dark.palette-gold,
+.theme-dark.palette-emerald,
+.theme-dark.palette-sapphire,
+.theme-dark.palette-crimson,
+.theme-dark.palette-amethyst {
+  --green: var(--accent);
+  --green-deep: var(--accent-bright);
+  --green-soft: rgb(var(--accent-rgb) / .12);
+}
+.theme-dark .new-chat,
+.theme-dark .send-button.ready { background: linear-gradient(145deg, var(--accent-bright), var(--accent-deep)); color: var(--accent-ink); box-shadow: 0 9px 28px rgb(var(--accent-rgb) / .24); }
+.theme-dark .new-chat:hover { background: linear-gradient(145deg, color-mix(in srgb, var(--accent-bright) 86%, white), var(--accent)); color: var(--accent-ink); box-shadow: 0 12px 36px rgb(var(--accent-rgb) / .3); }
+.theme-dark .filter-tabs button.active { background: rgb(var(--accent-rgb) / .11); color: var(--accent-bright); box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / .09) inset; }
+.theme-dark .filter-tabs span,
+.theme-dark .conversation-badges em { background: linear-gradient(145deg, var(--accent-bright), var(--accent-deep)); color: var(--accent-ink); box-shadow: 0 4px 14px rgb(var(--accent-rgb) / .23); }
+.theme-dark .conversation.active { border-color: rgb(var(--accent-rgb) / .16); background: linear-gradient(100deg, rgb(var(--accent-rgb) / .11), rgba(255,255,255,.015)); box-shadow: 0 10px 34px rgba(0,0,0,.13), 2px 0 0 var(--accent) inset; }
+.theme-dark .composer:focus-within { border-color: rgb(var(--accent-rgb) / .38); box-shadow: 0 16px 48px rgba(0,0,0,.32), 0 0 0 3px rgb(var(--accent-rgb) / .06), 0 0 30px rgb(var(--accent-rgb) / .025); }
+.theme-dark .composer-button:hover,
+.theme-dark .composer-button.active { background: rgb(var(--accent-rgb) / .10); color: var(--accent-bright); }
+.theme-dark .classified-orbit { border-color: rgb(var(--accent-rgb) / .23); box-shadow: 0 0 70px rgb(var(--accent-rgb) / .065), 0 0 0 18px rgb(var(--accent-rgb) / .025), 0 0 0 36px rgb(var(--accent-rgb) / .014); }
+.theme-dark .classified-orbit span,
+.theme-dark .classified-empty > p { color: var(--accent-bright); text-shadow: 0 0 24px rgb(var(--accent-rgb) / .2); }
+.theme-dark .classified-empty b { border-color: rgb(var(--accent-rgb) / .14); }
+.theme-dark .privacy-footer span,
+.theme-dark .privacy-footer a { color: var(--accent); }
+
+.palette-control { position: relative; flex: 0 0 auto; }
+.palette-toggle > span { width: 17px; height: 17px; border: 2px solid rgba(255,255,255,.32); border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .10), 0 0 16px rgb(var(--accent-rgb) / .28); }
+.palette-popover { position: absolute; z-index: 40; top: 48px; right: -86px; width: 278px; padding: 12px; border: 1px solid rgba(215,193,150,.13); border-radius: 18px; background: linear-gradient(145deg, rgba(23,24,21,.985), rgba(10,11,9,.99)); box-shadow: 0 26px 80px rgba(0,0,0,.48), 0 0 0 1px rgba(255,255,255,.018) inset; backdrop-filter: blur(24px); animation: picker-in .16s ease-out; }
+.palette-heading { display: flex; align-items: flex-start; justify-content: space-between; padding: 2px 3px 10px; }
+.palette-heading > span { display: flex; flex-direction: column; gap: 3px; }
+.palette-heading strong { color: #f0ede5; font-size: 12px; }
+.palette-heading small { color: #6f6e68; font-size: 8px; }
+.palette-heading > button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 8px; background: rgba(255,255,255,.04); color: #85837b; font-size: 17px; cursor: pointer; }
+.palette-options { display: grid; gap: 5px; }
+.palette-option { display: grid; width: 100%; min-height: 46px; padding: 6px 8px; grid-template-columns: 32px 1fr 18px; gap: 9px; align-items: center; border: 1px solid transparent; border-radius: 11px; background: transparent; color: #d9d6cf; text-align: left; cursor: pointer; }
+.palette-option:hover { background: rgba(255,255,255,.035); }
+.palette-option[aria-pressed="true"] { border-color: rgb(var(--option-rgb) / .18); background: rgb(var(--option-rgb) / .075); }
+.palette-option > i { display: block; width: 27px; height: 27px; border-radius: 9px; background: linear-gradient(145deg, var(--option-bright), var(--option)); box-shadow: 0 6px 15px rgb(var(--option-rgb) / .22); }
+.palette-option > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.palette-option strong { font-size: 10px; }
+.palette-option small { color: #74736d; font-size: 8px; }
+.palette-option > b { color: var(--option-bright); font-size: 11px; }
+.swatch-gold { --option: #8e713e; --option-bright: #e2c58f; --option-rgb: 208 174 113; }
+.swatch-emerald { --option: #24795c; --option-bright: #82efc4; --option-rgb: 82 217 165; }
+.swatch-sapphire { --option: #315ca8; --option-bright: #8ab8ff; --option-rgb: 93 157 255; }
+.swatch-crimson { --option: #973442; --option-bright: #ff8996; --option-rgb: 237 89 107; }
+.swatch-amethyst { --option: #6746b1; --option-bright: #c1a3ff; --option-rgb: 164 122 255; }
+
+.theme-light .palette-popover { border-color: rgba(42,39,74,.11); background: rgba(255,255,255,.98); box-shadow: 0 24px 70px rgba(40,36,80,.16); }
+.theme-light .palette-heading strong,
+.theme-light .palette-option { color: #242437; }
+.theme-light .palette-heading small,
+.theme-light .palette-option small { color: #77778c; }
+.theme-light .palette-option:hover { background: #f5f4fa; }
+.theme-light .palette-toggle > span { border-color: rgba(30,29,43,.16); }
+
+@media (max-width: 720px) {
+  .palette-popover { position: fixed; top: 76px; right: 8px; left: 8px; width: auto; }
+  .palette-control { position: static; }
+}

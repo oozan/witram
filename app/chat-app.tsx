@@ -96,6 +96,15 @@ type Person = { id: string; email: string; displayName: string; createdAt?: stri
 type ContactInvitation = { id: string; person: Person; createdAt: string };
 type SocialState = { contacts: Person[]; incoming: ContactInvitation[]; outgoing: ContactInvitation[]; blocked: Person[] };
 type DeviceSecurityState = { localDeviceId: string | null; devices: Array<{ id: string; name: string; updatedAt: string; current: boolean }>; backupUpdatedAt: string | null; canApproveLinks: boolean };
+type ColorPalette = "gold" | "emerald" | "sapphire" | "crimson" | "amethyst";
+
+const colorPalettes: Array<{ id: ColorPalette; name: string; note: string }> = [
+  { id: "gold", name: "Black Card", note: "Default" },
+  { id: "emerald", name: "Night Vision", note: "Emerald" },
+  { id: "sapphire", name: "Deep Cover", note: "Sapphire" },
+  { id: "crimson", name: "Red Notice", note: "Crimson" },
+  { id: "amethyst", name: "Cipher", note: "Amethyst" },
+];
 
 const initialChats: Chat[] = [
   {
@@ -343,6 +352,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [editingMessage, setEditingMessage] = useState<{ id: Message["id"]; originalText: string; previousDraft: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [palette, setPalette] = useState<ColorPalette>("gold");
+  const [showPalette, setShowPalette] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
@@ -487,6 +498,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         setDeleteTarget(null);
         setShowShortcutHelp(false);
         setShowAccount(false);
+        setShowPalette(false);
         setReportTarget(null);
         if (editingMessage) {
           setDraft(editingMessage.previousDraft);
@@ -504,6 +516,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       if (stored) setDraft(stored);
       const savedTheme = localStorage.getItem("whisper-theme-v2");
       if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+      const savedPalette = localStorage.getItem("whisper-palette-v1");
+      if (colorPalettes.some((option) => option.id === savedPalette)) setPalette(savedPalette as ColorPalette);
       setCompactMode(localStorage.getItem("whisper-density") === "compact");
       setReducedMotion(localStorage.getItem("whisper-reduced-motion") === "true");
       setChats((current) => current.map(withChatPreferences));
@@ -1493,6 +1507,13 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     });
   }
 
+  function choosePalette(next: ColorPalette) {
+    setPalette(next);
+    setShowPalette(false);
+    localStorage.setItem("whisper-palette-v1", next);
+    flash(`${colorPalettes.find((option) => option.id === next)?.name ?? "Color"} palette saved`);
+  }
+
   function toggleCompactMode() {
     setCompactMode((current) => {
       localStorage.setItem("whisper-density", current ? "comfortable" : "compact");
@@ -1525,7 +1546,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   return (
-    <main className={`app-shell theme-${theme} ${compactMode ? "compact-mode" : ""} ${reducedMotion ? "reduce-motion" : ""}`}>
+    <main className={`app-shell theme-${theme} palette-${palette} ${compactMode ? "compact-mode" : ""} ${reducedMotion ? "reduce-motion" : ""}`}>
       <section className={`sidebar ${mobileChatOpen ? "sidebar-hidden-mobile" : ""}`} aria-label="Conversation list">
         <header className="sidebar-header">
           <button className="avatar avatar-me" aria-label="Open account and contacts" onClick={() => setShowAccount(true)}>{accountName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "ME"}</button>
@@ -1534,6 +1555,15 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
             <button className="sync-status-button" aria-live="polite" onClick={retrySecureSync} disabled={syncState === "syncing"} title={syncState === "offline" ? "Retry secure sync" : undefined}><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · retry sync"}</button>
           </div>
           <button className="icon-button theme-toggle" aria-pressed={theme === "dark"} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} onClick={toggleTheme}>{theme === "light" ? "☾" : "☀"}</button>
+          <div className="palette-control">
+            <button className="icon-button palette-toggle" aria-expanded={showPalette} aria-label="Choose interface color" onClick={() => setShowPalette((value) => !value)}><span /></button>
+            {showPalette && <div className="palette-popover" role="dialog" aria-label="Interface color palette">
+              <div className="palette-heading"><span><strong>Interface color</strong><small>Saved automatically on this device</small></span><button onClick={() => setShowPalette(false)} aria-label="Close color palette">×</button></div>
+              <div className="palette-options">
+                {colorPalettes.map((option) => <button key={option.id} className={`palette-option swatch-${option.id}`} aria-pressed={palette === option.id} onClick={() => choosePalette(option.id)}><i /><span><strong>{option.name}</strong><small>{option.note}</small></span>{palette === option.id && <b>✓</b>}</button>)}
+              </div>
+            </div>}
+          </div>
           <button className="icon-button contacts-button" aria-label={`Open contacts${social.incoming.length ? `, ${social.incoming.length} pending invitations` : ""}`} onClick={() => setShowAccount(true)}>♧{social.incoming.length > 0 && <b>{social.incoming.length}</b>}</button>
           <button className="icon-button new-chat" aria-label="Start new chat" onClick={() => setShowNewChat(true)}>＋</button>
         </header>

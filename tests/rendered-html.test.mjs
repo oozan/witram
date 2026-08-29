@@ -347,7 +347,10 @@ test("syncs edits and deletions as encrypted control events", async () => {
 });
 
 test("persists device preferences and applies real conversation filters", async () => {
-  const client = await readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8");
+  const [client, styles] = await Promise.all([
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
 
   assert.match(client, /whisper-chat-preferences:/);
   assert.match(client, /conversationFilter === "groups"/);
@@ -365,6 +368,18 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /Copy message/);
   assert.match(client, /whisper-theme/);
   assert.match(client, /theme-\$\{theme\}/);
+  assert.match(client, /whisper-palette-v1/);
+  assert.match(client, /palette-\$\{palette\}/);
+  assert.match(client, /Black Card/);
+  assert.match(client, /Night Vision/);
+  assert.match(client, /Deep Cover/);
+  assert.match(client, /Red Notice/);
+  assert.match(client, /Cipher/);
+  assert.match(styles, /\.palette-gold/);
+  assert.match(styles, /\.palette-emerald/);
+  assert.match(styles, /\.palette-sapphire/);
+  assert.match(styles, /\.palette-crimson/);
+  assert.match(styles, /\.palette-amethyst/);
   assert.match(client, /whisper-density/);
   assert.match(client, /compact-mode/);
   assert.match(client, /whisper-reduced-motion/);
