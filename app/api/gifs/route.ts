@@ -30,10 +30,9 @@ export async function GET(request: Request) {
   } catch (error) { return safetyError(error); }
   const tenorKey = (env as unknown as { TENOR_API_KEY?: string }).TENOR_API_KEY;
   if (!tenorKey) {
-    return Response.json(
-      { configured: false, results: [], error: "Online GIF search is not configured" },
-      { status: 503 },
-    );
+    // The bundled encrypted emotes remain available without an online
+    // provider, so an absent optional key is a valid capability state.
+    return Response.json({ configured: false, results: [] });
   }
 
   const requestUrl = new URL(request.url);

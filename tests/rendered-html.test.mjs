@@ -428,6 +428,8 @@ test("keeps online GIF provider credentials on the server", async () => {
   ]);
 
   assert.match(route, /TENOR_API_KEY/);
+  assert.match(route, /configured: false, results: \[\]/);
+  assert.doesNotMatch(route, /configured: false[\s\S]{0,120}status: 503/);
   assert.match(route, /contentfilter/);
   assert.match(route, /tenor\.googleapis\.com/);
   assert.match(client, /\/api\/gifs/);
