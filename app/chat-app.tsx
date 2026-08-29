@@ -502,7 +502,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     const timer = window.setTimeout(() => {
       const stored = localStorage.getItem(`whisper-draft:${initialChats[0].id}`);
       if (stored) setDraft(stored);
-      const savedTheme = localStorage.getItem("whisper-theme");
+      const savedTheme = localStorage.getItem("whisper-theme-v2");
       if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
       setCompactMode(localStorage.getItem("whisper-density") === "compact");
       setReducedMotion(localStorage.getItem("whisper-reduced-motion") === "true");
@@ -1488,7 +1488,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   function toggleTheme() {
     setTheme((current) => {
       const next = current === "light" ? "dark" : "light";
-      localStorage.setItem("whisper-theme", next);
+      localStorage.setItem("whisper-theme-v2", next);
       return next;
     });
   }
@@ -1640,6 +1640,15 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         <div className="message-space" ref={messageSpaceRef} onScroll={handleMessageScroll}>
           <div className="day-divider"><span>Today</span></div>
           <div className="messages" aria-live="polite">
+            {activeChat.messages.length === 0 && (
+              <section className="classified-empty" aria-label="Secure channel ready">
+                <div className="classified-orbit" aria-hidden="true"><span>⌁</span></div>
+                <p>WHISPER / EYES ONLY</p>
+                <h2>{activeChat.kind === "saved" ? "Your private vault is ready" : "Secure channel established"}</h2>
+                <span>{activeChat.kind === "saved" ? "Write a note only this device can unlock." : "Send the first end-to-end encrypted signal."}</span>
+                <div><b>AES-256</b><b>LOCAL KEY</b><b>NO TRACE</b></div>
+              </section>
+            )}
             {activeChat.messages.map((message) => (
               <div
                 key={message.id}
