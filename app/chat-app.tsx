@@ -115,6 +115,18 @@ const formatTime = () =>
 
 const MAX_MESSAGE_LENGTH = 12_000;
 
+async function readApiResponse<T>(response: Response): Promise<T & { error?: string }> {
+  const body = await response.text();
+  if (!body) {
+    return { error: response.ok ? "The server returned an empty response" : `Request failed (${response.status})` } as T & { error?: string };
+  }
+  try {
+    return JSON.parse(body) as T & { error?: string };
+  } catch {
+    return { error: response.ok ? "The server returned an invalid response" : `Request failed (${response.status})` } as T & { error?: string };
+  }
+}
+
 const emojiGroups = [
   { name: "Smileys", icon: "☺", emojis: ["😀", "😃", "😄", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "🤗", "🤔", "🫡", "🥹", "😴", "😭", "😤", "🤯", "😱", "🙈", "🫠"] },
   { name: "Gestures", icon: "✌", emojis: ["👋", "🤚", "🖐️", "✋", "👌", "🤌", "🤏", "✌️", "🤞", "🫶", "🤟", "🤙", "👈", "👉", "👆", "👇", "👍", "👎", "👏", "🙌", "🤝", "🙏", "💪", "🫵"] },
@@ -749,7 +761,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title: chat.name, kind: chat.kind ?? "direct", memberIds: chat.memberIds ?? [] }),
     });
-    const created = await createResponse.json() as { conversation?: { id: string }; error?: string };
+    const created = await readApiResponse<{ conversation?: { id: string } }>(createResponse);
     if (!createResponse.ok || !created.conversation) throw new Error(created.error ?? "Conversation creation failed");
     const secureChat = { ...chat, id: created.conversation.id, persisted: true };
     setActiveId(secureChat.id);
@@ -782,7 +794,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         }),
       });
       if (!response.ok) throw new Error("Message storage failed");
-      const payload = await response.json() as { message: { id: string } };
+      const payload = await readApiResponse<{ message?: { id: string } }>(response);
+      if (!payload.message) throw new Error(payload.error ?? "Message storage failed");
       if (usesMls) await cacheSentMlsMessage(String(message.id), payload.message.id, secureChat.id);
       setChats((current) => current.map((item) =>
         item.id === secureChat.id || item.id === chat.id
@@ -808,7 +821,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title: contact.displayName, kind: "direct", memberIds: [contact.id] }),
       });
-      const payload = await response.json() as { conversation?: { id: string; title: string }; error?: string };
+      const payload = await readApiResponse<{ conversation?: { id: string; title: string } }>(response);
       if (!response.ok || !payload.conversation) throw new Error(payload.error ?? "Conversation creation failed");
       const mls = await createMlsConversation(currentUser, payload.conversation.id, [contact.id]);
       const chat: Chat = {
@@ -1313,7 +1326,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     });
     if (!response.ok) throw new Error("Encrypted control event storage failed");
     if (usesMls) {
-      const payload = await response.json() as { message: { id: string } };
+      const payload = await readApiResponse<{ message?: { id: string } }>(response);
+      if (!payload.message) throw new Error(payload.error ?? "Encrypted control event storage failed");
       await cacheSentMlsMessage(localId, payload.message.id, chat.id);
     }
   }

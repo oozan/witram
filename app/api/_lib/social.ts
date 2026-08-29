@@ -35,6 +35,26 @@ export function json(data: unknown, init?: ResponseInit) {
 
 let initialization: Promise<void> | null = null;
 
+type LegacyColumn = readonly [name: string, statement: string];
+
+async function ensureColumns(db: D1Database, table: string, additions: readonly LegacyColumn[]) {
+  const columns = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  const names = new Set((columns.results ?? []).map((column) => column.name));
+  for (const [name, statement] of additions) {
+    if (names.has(name)) continue;
+    try {
+      await db.prepare(statement).run();
+      names.add(name);
+    } catch (error) {
+      // Concurrent Workers can initialize the same legacy database together.
+      // Treat another request adding the expected column as success.
+      const current = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+      if (!(current.results ?? []).some((column) => column.name === name)) throw error;
+      names.add(name);
+    }
+  }
+}
+
 export async function initializeDatabase() {
   initialization ??= initializeDatabaseOnce();
   try {
@@ -297,25 +317,39 @@ async function initializeDatabaseOnce() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_reports_reported_user_status ON reports(reported_user_id, status)"),
   ]);
 
-  // Local Miniflare databases can predate generated migrations. Upgrade the
-  // original users table without deleting accounts or encrypted chat data.
-  const columns = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
-  const names = new Set((columns.results ?? []).map((column) => column.name));
-  const additions = [
+  // Local Miniflare and early hosted databases can predate generated
+  // migrations. Upgrade every original table in place without deleting
+  // accounts, membership, or encrypted chat data.
+  await ensureColumns(db, "users", [
     ["display_name", "ALTER TABLE users ADD COLUMN display_name TEXT"],
     ["identity_public_key", "ALTER TABLE users ADD COLUMN identity_public_key TEXT"],
     ["updated_at", "ALTER TABLE users ADD COLUMN updated_at TEXT"],
-  ] as const;
-  for (const [name, statement] of additions) {
-    if (names.has(name)) continue;
-    try {
-      await db.prepare(statement).run();
-    } catch (error) {
-      const current = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
-      if (!(current.results ?? []).some((column) => column.name === name)) throw error;
-    }
-  }
+  ]);
+  await ensureColumns(db, "conversation_members", [
+    ["role", "ALTER TABLE conversation_members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'"],
+  ]);
+  await ensureColumns(db, "messages", [
+    ["protocol", "ALTER TABLE messages ADD COLUMN protocol TEXT NOT NULL DEFAULT 'legacy-aes-gcm'"],
+    ["epoch", "ALTER TABLE messages ADD COLUMN epoch TEXT"],
+    ["sender_device_id", "ALTER TABLE messages ADD COLUMN sender_device_id TEXT"],
+  ]);
   await db.prepare("UPDATE users SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL").run();
+  await db.prepare(
+    `UPDATE conversation_members AS member
+     SET role = 'owner'
+     WHERE role = 'member'
+       AND user_id = (
+         SELECT candidate.user_id
+         FROM conversation_members AS candidate
+         WHERE candidate.conversation_id = member.conversation_id
+         ORDER BY candidate.joined_at, candidate.user_id
+         LIMIT 1
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM conversation_members AS owner
+         WHERE owner.conversation_id = member.conversation_id AND owner.role = 'owner'
+       )`,
+  ).run();
 }
 
 export async function registerIdentity(current: AuthenticatedIdentity) {

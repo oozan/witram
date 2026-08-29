@@ -44,9 +44,13 @@ test("uses hashed revocable sessions and hardened browser cookies", async () => 
   assert.match(auth, /DELETE FROM auth_sessions WHERE token_hash/);
   assert.match(social, /sessionIdentity/);
   assert.doesNotMatch(social, /oai-authenticated|x-whisper-user/);
-  assert.match(social, /PRAGMA table_info\(users\)/);
+  assert.match(social, /PRAGMA table_info\(\$\{table\}\)/);
+  assert.match(social, /ensureColumns\(db, "users"/);
   assert.match(social, /ALTER TABLE users ADD COLUMN display_name TEXT/);
   assert.match(social, /ALTER TABLE users ADD COLUMN updated_at TEXT/);
+  assert.match(social, /ALTER TABLE conversation_members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'/);
+  assert.match(social, /ALTER TABLE messages ADD COLUMN protocol TEXT NOT NULL DEFAULT 'legacy-aes-gcm'/);
+  assert.match(social, /ALTER TABLE messages ADD COLUMN sender_device_id TEXT/);
   assert.match(logout, /requireSameOrigin/);
   assert.match(schema, /authSessions/);
 });

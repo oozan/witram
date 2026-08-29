@@ -52,6 +52,14 @@ test("keeps plaintext out of the persistence boundary", async () => {
   assert.match(hosting, /"d1": "DB"/);
 });
 
+test("handles empty or invalid API responses without exposing JSON parser errors", async () => {
+  const client = await readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8");
+  assert.match(client, /async function readApiResponse/);
+  assert.match(client, /The server returned an empty response/);
+  assert.match(client, /The server returned an invalid response/);
+  assert.match(client, /readApiResponse<\{ conversation\?/);
+});
+
 test("encrypts reaction events before persistence", async () => {
   const [client, route] = await Promise.all([
     readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
