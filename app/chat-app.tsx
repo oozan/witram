@@ -333,6 +333,9 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [newChatMode, setNewChatMode] = useState<"direct" | "group">("direct");
+  const [groupTitle, setGroupTitle] = useState("");
+  const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
   const [creatingChat, setCreatingChat] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [accountName, setAccountName] = useState(currentUser.displayName);
@@ -442,7 +445,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   }, [activeChat.id, activeChat.memberIds, activeChat.persisted, currentUser, mlsDeviceId]);
 
   useEffect(() => {
-    const peerId = activeChat.memberIds?.[0];
+    const peerId = activeChat.kind === "direct" ? activeChat.memberIds?.[0] : undefined;
     if (!showInfo || !peerId || !activeMlsStatus?.ready) {
       setSafetyNumber(null);
       return;
@@ -450,7 +453,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     let cancelled = false;
     getSafetyNumber(currentUser, peerId).then((number) => { if (!cancelled) setSafetyNumber(number); }).catch(() => { if (!cancelled) setSafetyNumber(null); });
     return () => { cancelled = true; };
-  }, [activeChat.memberIds, activeMlsStatus?.ready, currentUser, showInfo]);
+  }, [activeChat.kind, activeChat.memberIds, activeMlsStatus?.ready, currentUser, showInfo]);
 
   useEffect(() => {
     if (!showAccount) return;
@@ -877,6 +880,53 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       flash("MLS private conversation created");
     } catch (error) {
       flash(error instanceof Error ? error.message : "Conversation could not be created");
+    } finally {
+      setCreatingChat(false);
+    }
+  }
+
+  function toggleGroupMember(userId: string) {
+    setGroupMemberIds((current) => current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]);
+  }
+
+  async function createGroupConversation() {
+    const title = groupTitle.trim().replace(/\s+/g, " ");
+    if (creatingChat || !title || !groupMemberIds.length) return;
+    setCreatingChat(true);
+    try {
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, kind: "group", memberIds: groupMemberIds }),
+      });
+      const payload = await readApiResponse<{ conversation?: { id: string; title: string } }>(response);
+      if (!response.ok || !payload.conversation) throw new Error(payload.error ?? "Group creation failed");
+      const mls = await createMlsConversation(currentUser, payload.conversation.id, groupMemberIds);
+      const chat: Chat = {
+        id: payload.conversation.id,
+        name: payload.conversation.title,
+        initials: payload.conversation.title.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(),
+        preview: `${groupMemberIds.length + 1} members · no messages yet`,
+        time: "Now",
+        color: "violet",
+        messages: [],
+        kind: "group",
+        persisted: true,
+        memberIds: [...groupMemberIds],
+      };
+      setChats((current) => [chat, ...current]);
+      setMlsDeviceId(mls.deviceId);
+      setMlsStatuses((current) => ({ ...current, [chat.id]: { ready: true, epoch: mls.epoch, verified: false } }));
+      setActiveId(chat.id);
+      setGroupTitle("");
+      setGroupMemberIds([]);
+      setDraft("");
+      setMobileChatOpen(true);
+      setShowNewChat(false);
+      setSyncState("online");
+      flash("MLS private group created");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Group could not be created");
     } finally {
       setCreatingChat(false);
     }
@@ -1859,7 +1909,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
           </div>
           <div className="info-card">
             <div><span>Encryption</span><strong>{activeMlsStatus?.ready ? `MLS epoch ${activeMlsStatus.epoch}` : "Device key active"}</strong></div>
-            <p>{activeMlsStatus?.ready ? "RFC 9420 MLS provides forward secrecy and epoch-based key rotation. Verify the safety number with your contact over another channel." : "Private-note keys are stored only in this browser."}</p>
+            <p>{activeMlsStatus?.ready ? activeChat.kind === "group" ? "RFC 9420 MLS provides forward secrecy and epoch-based key rotation for every current group member." : "RFC 9420 MLS provides forward secrecy and epoch-based key rotation. Verify the safety number with your contact over another channel." : "Private-note keys are stored only in this browser."}</p>
             {safetyNumber && <div className="safety-number" aria-label="Conversation safety number">{safetyNumber}</div>}
             {activeMlsStatus?.ready && <div className="security-actions">
               <button onClick={() => void navigator.clipboard.writeText(safetyNumber ?? "").then(() => flash("Safety number copied"))} disabled={!safetyNumber}>Copy number</button>
@@ -1869,7 +1919,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
           </div>
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
           <button className="archive-chat-action export-chat-action" onClick={exportConversation}>Export conversation</button>
-          {!!activeChat.memberIds?.[0] && <div className="trust-actions">
+          {activeChat.kind === "direct" && !!activeChat.memberIds?.[0] && <div className="trust-actions">
             <button onClick={() => void setBlocked(activeChat.memberIds![0], true)}>Block account</button>
             <button onClick={() => setReportTarget({ userId: activeChat.memberIds![0], name: activeChat.name })}>Report account</button>
           </div>}
@@ -1889,17 +1939,25 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
             <button className="modal-close" onClick={() => setShowNewChat(false)} aria-label="Close new conversation">×</button>
             <span className="modal-icon">⌁</span>
             <h2 id="new-chat-title">Start a private conversation</h2>
-            <p>Choose an accepted contact. Both accounts become enforced members of the conversation.</p>
+            <p>Choose accepted contacts. Whisper enforces membership and creates a fresh MLS group for the selected accounts.</p>
+            <div className="new-chat-tabs" role="tablist" aria-label="Conversation type"><button role="tab" aria-selected={newChatMode === "direct"} onClick={() => setNewChatMode("direct")}>Direct</button><button role="tab" aria-selected={newChatMode === "group"} onClick={() => setNewChatMode("group")}>Group</button></div>
+            {newChatMode === "group" && <label className="group-name-field" htmlFor="group-name">Group name<input id="group-name" maxLength={80} value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} placeholder="Operation name" /></label>}
             <div className="people-list compact-people-list">
-              {social.contacts.length ? social.contacts.map((contact) => (
+              {social.contacts.length ? social.contacts.map((contact) => newChatMode === "direct" ? (
                 <button key={contact.id} className="person-row" onClick={() => void createConversation(contact)} disabled={creatingChat}>
                   <span className="person-avatar">{contact.displayName.slice(0, 2).toUpperCase()}</span>
                   <span><strong>{contact.displayName}</strong><small>{contact.email}</small></span>
                   <b>{creatingChat ? "…" : "Chat"}</b>
                 </button>
-              )) : <div className="social-empty"><strong>No accepted contacts yet</strong><span>Open your account panel and invite someone by email first.</span></div>}
+              ) : <button key={contact.id} className={`person-row group-person-row ${groupMemberIds.includes(contact.id) ? "selected" : ""}`} aria-pressed={groupMemberIds.includes(contact.id)} onClick={() => toggleGroupMember(contact.id)} disabled={creatingChat}>
+                <span className="person-avatar">{contact.displayName.slice(0, 2).toUpperCase()}</span>
+                <span><strong>{contact.displayName}</strong><small>{contact.email}</small></span>
+                <b>{groupMemberIds.includes(contact.id) ? "✓" : "+"}</b>
+              </button>) : <div className="social-empty"><strong>No accepted contacts yet</strong><span>Open your account panel and invite someone by email first.</span></div>}
             </div>
+            {newChatMode === "group" && <p className="group-selection-count">{groupMemberIds.length} contact{groupMemberIds.length === 1 ? "" : "s"} selected</p>}
             <div className="modal-actions"><button type="button" onClick={() => setShowNewChat(false)}>Close</button><button className="primary" type="button" onClick={() => { setShowNewChat(false); setShowAccount(true); }}>Manage contacts</button></div>
+            {newChatMode === "group" && <button className="create-group-action" type="button" disabled={creatingChat || !groupTitle.trim() || !groupMemberIds.length} onClick={() => void createGroupConversation()}>{creatingChat ? "Securing group…" : "Create encrypted group"}</button>}
           </section>
         </div>
       )}

@@ -450,3 +450,15 @@ test("keeps online GIF provider credentials on the server", async () => {
   assert.match(client, /\/api\/gifs/);
   assert.doesNotMatch(client, /TENOR_API_KEY|tenor\.googleapis\.com/);
 });
+
+test("creates multi-contact MLS groups from the conversation picker", async () => {
+  const [client, conversations] = await Promise.all([
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/conversations/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(client, /createGroupConversation/);
+  assert.match(client, /Create encrypted group/);
+  assert.match(client, /createMlsConversation\(currentUser, payload\.conversation\.id, groupMemberIds\)/);
+  assert.match(conversations, /kind === "group"/);
+  assert.match(conversations, /VALUES \(\?, \?, 'owner'\)/);
+});

@@ -485,6 +485,15 @@ button.reply-quote:hover { background: rgba(15,124,102,.12); color: var(--green-
 .invite-form input { height: 42px; }
 .people-list { display: grid; gap: 6px; max-height: 280px; overflow-y: auto; }
 .compact-people-list { max-height: 350px; margin-top: -7px; }
+.new-chat-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: -8px 0 15px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.new-chat-tabs button { min-height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 10px; font-weight: 850; cursor: pointer; }
+.new-chat-tabs button[aria-selected="true"] { background: var(--green-soft); color: var(--green-deep); }
+.group-name-field { margin-bottom: 13px; }
+.group-name-field input { margin-top: 7px; }
+.group-person-row.selected { border-color: var(--green); background: var(--green-soft); }
+.group-selection-count { margin: 9px 0 0; color: var(--muted); font-size: 9px; text-align: center; }
+.create-group-action { width: 100%; min-height: 42px; margin-top: 10px; border: 0; border-radius: 11px; background: var(--green); color: #fff; font-size: 11px; font-weight: 850; cursor: pointer; }
+.create-group-action:disabled { cursor: not-allowed; opacity: .45; }
 .person-row { display: flex; width: 100%; min-height: 55px; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 13px; background: #fff; text-align: left; }
 button.person-row { cursor: pointer; }
 button.person-row:hover { border-color: #aacfc3; background: #f5faf8; }
