@@ -92,12 +92,34 @@ async function runScheduledMaintenance(env: Env, controller: ScheduledController
   await env.DB.batch(statements);
 }
 
-function withSecurityHeaders(response: Response, request: Request) {
-  const secured = new Response(response.body, response);
+async function withSecurityHeaders(response: Response, request: Request) {
+  const contentType = response.headers.get("content-type") ?? "";
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(18));
+  const nonce = btoa(String.fromCharCode(...nonceBytes));
+  const isHtml = contentType.toLowerCase().includes("text/html");
+  const body = isHtml ? (await response.text()).replace(/<script(?=[\s>])/gi, `<script nonce="${nonce}"`) : response.body;
+  const secured = new Response(body, response);
+  if (isHtml) secured.headers.delete("content-length");
   secured.headers.set("x-content-type-options", "nosniff");
   secured.headers.set("referrer-policy", "strict-origin-when-cross-origin");
   secured.headers.set("permissions-policy", "camera=(), microphone=(self), geolocation=(), payment=()");
   secured.headers.set("cross-origin-opener-policy", "same-origin");
+  secured.headers.set("cross-origin-resource-policy", "same-origin");
+  secured.headers.set("content-security-policy", [
+    "default-src 'self'",
+    `script-src 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://media.tenor.com https://*.tenor.com",
+    "media-src 'self' blob: https://media.tenor.com https://*.tenor.com",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+  ].join("; "));
   if (new URL(request.url).protocol === "https:") {
     secured.headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   }

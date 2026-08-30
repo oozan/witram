@@ -437,6 +437,11 @@ test("adds baseline browser security headers", async () => {
   assert.match(worker, /x-content-type-options/);
   assert.match(worker, /strict-transport-security/);
   assert.match(worker, /permissions-policy/);
+  assert.match(worker, /content-security-policy/);
+  assert.match(worker, /script-src 'nonce-\$\{nonce\}' 'strict-dynamic'/);
+  assert.match(worker, /object-src 'none'/);
+  assert.match(worker, /frame-ancestors 'none'/);
+  assert.doesNotMatch(worker, /script-src[^\n]*unsafe-inline/);
 });
 
 test("keeps online GIF provider credentials on the server", async () => {

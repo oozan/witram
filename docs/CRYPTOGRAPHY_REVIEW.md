@@ -71,7 +71,7 @@ An independent reviewer should prove or falsify each invariant against code and 
 5. Recovery has no transparency-backed anti-rollback counter and relies on user custody of a high-entropy key.
 6. Safety verification state is local and does not synchronize across verified devices.
 7. Metadata and traffic-analysis protections are intentionally out of scope for the cryptographic payload protocol.
-8. Content Security Policy is not yet strict enough to be considered a hardened key-bearing web-client boundary.
+8. The Worker applies a per-response nonce and strict-dynamic Content Security Policy to framework scripts, blocks object/frame/base injection, and constrains forms and outbound resource classes. Inline styles remain allowed for the current component system, so independent browser/XSS testing is still required.
 
 ## Independent audit acceptance criteria
 

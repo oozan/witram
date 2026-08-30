@@ -64,6 +64,7 @@ The 0.10 release adds app-owned email accounts and optional Google OpenID Connec
 - Cloudflare D1 persistence containing ciphertext and IVs, never message plaintext
 - Server-side conversation membership checks
 - Payload size limits, no-store API responses, and baseline browser security headers
+- Per-response script nonces and a strict-dynamic Content Security Policy for the key-bearing web client
 - App-owned session identity enforced by every account and chat API
 - Generated and versioned database migrations
 - Client-side encrypted image, local GIF, video, audio, voice-message, and file uploads
@@ -123,7 +124,7 @@ The test command creates the production build and verifies the rendered product 
 
 Direct-chat bodies are encrypted by `ts-mls` 1.6 using the RFC 9420 ciphersuite `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519`. The server validates account membership and signed device bundles but stores only MLS ciphertext, public commits, Welcome payloads, and routing metadata. Saved Messages continue to use AES-256-GCM with a non-exportable browser key.
 
-This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates standardized primitives; that is not the same as an audited product. Multi-device linking, removal, recovery, encrypted media, initial group creation, and scheduled retention sweeps are implemented, but recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. Post-creation group membership administration, push notifications, XSS hardening review, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
+This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates standardized primitives; that is not the same as an audited product. Multi-device linking, removal, recovery, encrypted media, initial group creation, scheduled retention sweeps, and a nonce-based browser policy are implemented, but recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. Post-creation group membership administration, push notifications, independent browser/XSS testing, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
 
 ## Project shape
 
