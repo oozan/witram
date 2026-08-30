@@ -13,6 +13,7 @@ Assign a named service owner, privacy contact, security contact, and backup oper
 - Set `ALERT_WEBHOOK_URL` to an HTTPS endpoint owned by the operator. Critical application events are persisted first and then sent to this endpoint. Test delivery after configuration and quarterly thereafter.
 - Alert on health failures, sustained rate-limit increases, report backlog growth, unexpected restriction changes, failed deployments, and storage/database capacity thresholds.
 - Never send message ciphertext, keys, filenames, email addresses, report details, or recovery material to alerting systems.
+- The Worker runs scheduled maintenance at minute 17 of every hour. It deletes expired or abandoned R2 ciphertext, expires authentication and device-link artifacts, prunes limiter buckets, and applies the documented metadata-retention windows. Monitor `scheduled_maintenance` events and Worker cron failures.
 
 ## Abuse response
 
@@ -59,4 +60,5 @@ Keep backup access separate from routine deployment access, require strong authe
 - The exact tested commit is pushed and packaged.
 - Database migrations are present and forward-compatible; a recovery point exists before applying them.
 - Health monitoring, alert delivery, operations access, retention cleanup, and backup freshness are verified.
+- The hourly Cron Trigger is enabled in the deployed Worker and a recent `scheduled_maintenance` event is visible.
 - Privacy Policy, Terms, security limitations, subprocessors, operator identity, governing terms, and contact routes are reviewed for the actual deployment and jurisdiction.

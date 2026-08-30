@@ -254,6 +254,9 @@ test("keeps uploaded media and thumbnails encrypted outside the browser", async 
   assert.match(client, /MediaRecorder/);
   assert.match(client, /Only ciphertext leaves this device/);
   assert.match(worker, /microphone=\(self\)/);
+  assert.match(worker, /scheduled\(controller/);
+  assert.match(worker, /scheduled_maintenance/);
+  assert.match(worker, /env\.MEDIA\.delete/);
 });
 
 test("round-trips independent AES-GCM media ciphertext", async () => {

@@ -20,6 +20,13 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+interface ScheduledController {
+  cron: string;
+  scheduledTime: number;
+}
+
+type ExpiredAttachment = { id: string; object_key: string; thumbnail_object_key: string | null };
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -44,7 +51,46 @@ const worker = {
 
     return withSecurityHeaders(await handler.fetch(request, env, ctx), request);
   },
+  scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(runScheduledMaintenance(env, controller));
+  },
 };
+
+async function runScheduledMaintenance(env: Env, controller: ScheduledController) {
+  const now = new Date(controller.scheduledTime || Date.now());
+  const nowIso = now.toISOString();
+  const abandonedBefore = new Date(now.getTime() - 3_600_000).toISOString();
+  const expired = await env.DB.prepare(
+    `SELECT id, object_key, thumbnail_object_key FROM attachments
+     WHERE status != 'deleted' AND (
+       (expires_at IS NOT NULL AND expires_at <= ?)
+       OR (status = 'pending' AND created_at <= ?)
+     ) ORDER BY COALESCE(expires_at, created_at) ASC LIMIT 200`,
+  ).bind(nowIso, abandonedBefore).all<ExpiredAttachment>();
+  const attachments = expired.results ?? [];
+  await Promise.all(attachments.flatMap((attachment) => [
+    env.MEDIA.delete(attachment.object_key),
+    attachment.thumbnail_object_key ? env.MEDIA.delete(attachment.thumbnail_object_key) : Promise.resolve(),
+  ]));
+
+  const statements = attachments.map((attachment) => env.DB.prepare(
+    "UPDATE attachments SET status = 'deleted', deleted_at = ?, updated_at = ? WHERE id = ? AND status != 'deleted'",
+  ).bind(nowIso, nowIso, attachment.id));
+  statements.push(
+    env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at <= ?").bind(nowIso),
+    env.DB.prepare("DELETE FROM auth_oauth_states WHERE expires_at <= ?").bind(nowIso),
+    env.DB.prepare("DELETE FROM auth_email_challenges WHERE expires_at <= ?").bind(nowIso),
+    env.DB.prepare("DELETE FROM auth_password_resets WHERE expires_at <= ?").bind(nowIso),
+    env.DB.prepare("DELETE FROM device_link_sessions WHERE expires_at <= ?").bind(nowIso),
+    env.DB.prepare("DELETE FROM rate_limit_buckets WHERE expires_at < ?").bind(Math.floor(now.getTime() / 1000)),
+    env.DB.prepare("DELETE FROM attachments WHERE status = 'deleted' AND deleted_at <= ?").bind(new Date(now.getTime() - 30 * 86_400_000).toISOString()),
+    env.DB.prepare("DELETE FROM security_events WHERE created_at <= ?").bind(new Date(now.getTime() - 180 * 86_400_000).toISOString()),
+    env.DB.prepare(
+      "INSERT INTO security_events (id, actor_id, category, severity, endpoint, metadata, created_at) VALUES (?, NULL, 'scheduled_maintenance', 'info', 'cron', ?, ?)",
+    ).bind(crypto.randomUUID(), JSON.stringify({ expiredAttachments: attachments.length, cron: controller.cron }), nowIso),
+  );
+  await env.DB.batch(statements);
+}
 
 function withSecurityHeaders(response: Response, request: Request) {
   const secured = new Response(response.body, response);

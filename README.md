@@ -70,6 +70,7 @@ The 0.10 release adds app-owned email accounts and optional Google OpenID Connec
 - Separately encrypted WebP thumbnails for image, GIF, and video previews
 - MIME allowlists, file-signature checks, and per-media size limits before encryption
 - R2 ciphertext storage with D1 ownership, membership, upload-state, and expiry metadata
+- Hourly scheduled deletion of expired or abandoned ciphertext and stale security artifacts
 - On-demand client decryption for previews, playback, and downloads
 - Per-upload retention controls plus immediate encrypted-object deletion when the sender deletes a message
 - Durable request and bandwidth limits for messages, media, invitations, reports, device/MLS operations, backups, profiles, and external GIF search
@@ -122,7 +123,7 @@ The test command creates the production build and verifies the rendered product 
 
 Direct-chat bodies are encrypted by `ts-mls` 1.6 using the RFC 9420 ciphersuite `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519`. The server validates account membership and signed device bundles but stores only MLS ciphertext, public commits, Welcome payloads, and routing metadata. Saved Messages continue to use AES-256-GCM with a non-exportable browser key.
 
-This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates standardized primitives; that is not the same as an audited product. Multi-device linking, removal, recovery, encrypted media, and initial group creation are implemented, but recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. Post-creation group membership administration, push notifications, XSS hardening review, scheduled retention sweeps, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
+This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates standardized primitives; that is not the same as an audited product. Multi-device linking, removal, recovery, encrypted media, initial group creation, and scheduled retention sweeps are implemented, but recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. Post-creation group membership administration, push notifications, XSS hardening review, and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
 
 ## Project shape
 
