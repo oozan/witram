@@ -154,15 +154,23 @@ export async function revokeSession(db: AuthDatabase, request: Request) {
   if (token) await db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
 }
 
+export async function currentSessionHash(request: Request) {
+  const token = cookieValue(request, SESSION_COOKIE);
+  return token ? sha256(token) : null;
+}
+
 export async function sessionIdentity(db: AuthDatabase, request: Request): Promise<AuthenticatedIdentity | null> {
   const token = cookieValue(request, SESSION_COOKIE);
   if (!token) return null;
   const current = await db.prepare(
-    `SELECT u.id, u.email, u.display_name FROM auth_sessions s
+    `SELECT u.id, u.email, u.display_name, s.last_seen_at FROM auth_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ? LIMIT 1`,
-  ).bind(await sha256(token), new Date().toISOString()).first<{ id: string; email: string; display_name: string | null }>();
+  ).bind(await sha256(token), new Date().toISOString()).first<{ id: string; email: string; display_name: string | null; last_seen_at: string }>();
   if (!current?.email) return null;
+  if (Date.now() - new Date(current.last_seen_at).getTime() > 15 * 60_000) {
+    await db.prepare("UPDATE auth_sessions SET last_seen_at = ? WHERE token_hash = ?").bind(new Date().toISOString(), await sha256(token)).run();
+  }
   return { userId: current.id, email: current.email, displayName: current.display_name ?? current.email.split("@")[0] };
 }
 

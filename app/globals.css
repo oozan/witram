@@ -445,7 +445,18 @@ button.reply-quote:hover { background: rgba(15,124,102,.12); color: var(--green-
 .profile-form button, .invite-form button { padding: 0 15px; border: 0; border-radius: 10px; background: var(--green); color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
 .profile-form button:disabled, .invite-form button:disabled { opacity: .45; cursor: not-allowed; }
 .social-section { margin-top: 22px; }
-.device-security-section { margin-top: 22px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: #f8faf9; }
+.device-security-section, .session-security-section { margin-top: 22px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: #f8faf9; }
+.session-explanation { margin: -2px 0 10px; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.session-list { display: grid; gap: 6px; }
+.session-row { display: flex; gap: 9px; align-items: center; min-height: 50px; padding: 9px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+.session-symbol { color: var(--green); font-size: 10px; }
+.session-row > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.session-row strong { font-size: 10px; }
+.session-row small { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.session-row button, .session-bulk-actions button { min-height: 31px; padding: 0 9px; border: 0; border-radius: 8px; background: var(--green-soft); color: var(--green-deep); font-size: 8px; font-weight: 800; cursor: pointer; }
+.session-row button:disabled, .session-bulk-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.session-bulk-actions { display: flex; gap: 7px; margin-top: 10px; }
+.session-bulk-actions button.danger-text { background: #f8e8e5; color: #a84d45; }
 .device-list { display: grid; gap: 6px; }
 .device-row { display: flex; gap: 9px; align-items: center; padding: 9px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
 .device-symbol { color: var(--green); font-size: 10px; }
@@ -520,7 +531,7 @@ button.person-row:hover { border-color: #aacfc3; background: #f5faf8; }
 .theme-dark .conversation:hover, .theme-dark .icon-button:hover { background: #22332d; }
 .theme-dark .conversation.active { background: #1c3b32; }
 .theme-dark .search-wrap, .theme-dark .chat-search-field, .theme-dark .composer, .theme-dark .info-card, .theme-dark .new-chat-modal input, .theme-dark .profile-form, .theme-dark .person-row, .theme-dark .report-modal select, .theme-dark .report-modal textarea { border-color: #354840; background: #202f2a; }
-.theme-dark .device-security-section, .theme-dark .device-row, .theme-dark .device-callout { border-color: #354840; background: #202f2a; }
+.theme-dark .device-security-section, .theme-dark .device-row, .theme-dark .device-callout, .theme-dark .session-security-section, .theme-dark .session-row { border-color: #354840; background: #202f2a; }
 .theme-dark .device-callout.warning { border-color: #685b35; background: #302c1e; }
 .theme-dark .safety-number { border-color: #45665a; background: #17251f; color: #d9e8e2; }
 .theme-dark .bubble, .theme-dark .quick-actions button, .theme-dark .archive-chat-action, .theme-dark .message-action-menu, .theme-dark .reaction-picker { background: #22322c; }
@@ -758,7 +769,7 @@ button:active { transform: scale(.97); }
 .modal-backdrop { background: rgba(3,4,8,.72); backdrop-filter: blur(12px) saturate(80%); }
 .modal-icon { background: rgba(122,102,255,.14); color: #aa9eff; box-shadow: 0 0 24px rgba(108,87,255,.08) inset; }
 .new-chat-modal h2, .info-panel h2 { color: #f2f0fa; }
-.theme-dark .new-chat-modal input, .theme-dark .profile-form, .theme-dark .person-row, .theme-dark .device-security-section, .theme-dark .device-row, .theme-dark .device-callout, .theme-dark .info-card { border-color: rgba(181,176,220,.10); background: rgba(255,255,255,.035); }
+.theme-dark .new-chat-modal input, .theme-dark .profile-form, .theme-dark .person-row, .theme-dark .device-security-section, .theme-dark .device-row, .theme-dark .device-callout, .theme-dark .session-security-section, .theme-dark .session-row, .theme-dark .info-card { border-color: rgba(181,176,220,.10); background: rgba(255,255,255,.035); }
 .quick-actions button:hover, .archive-chat-action:hover, button.person-row:hover { border-color: rgba(139,124,255,.32); color: #b9b0ff; box-shadow: 0 0 22px rgba(111,91,255,.06) inset; }
 .safety-number, .theme-dark .safety-number { border-color: rgba(85,230,209,.25); background: rgba(35,211,188,.035); color: #abd9d1; }
 .toast { border: 1px solid rgba(118,231,214,.18); background: rgba(16,18,24,.94); box-shadow: 0 14px 46px rgba(0,0,0,.42), 0 0 24px rgba(85,230,209,.055); color: #e9e8f2; backdrop-filter: blur(18px); }

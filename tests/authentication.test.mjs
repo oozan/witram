@@ -31,10 +31,11 @@ test("owns email credentials and stores only hardened password derivatives", asy
 });
 
 test("uses hashed revocable sessions and hardened browser cookies", async () => {
-  const [auth, social, logout, schema] = await Promise.all([
+  const [auth, social, logout, sessions, schema] = await Promise.all([
     source("../app/api/_lib/auth.ts"),
     source("../app/api/_lib/social.ts"),
     source("../app/api/auth/logout/route.ts"),
+    source("../app/api/auth/sessions/route.ts"),
     source("../db/schema.ts"),
   ]);
 
@@ -52,6 +53,10 @@ test("uses hashed revocable sessions and hardened browser cookies", async () => 
   assert.match(social, /ALTER TABLE messages ADD COLUMN protocol TEXT NOT NULL DEFAULT 'legacy-aes-gcm'/);
   assert.match(social, /ALTER TABLE messages ADD COLUMN sender_device_id TEXT/);
   assert.match(logout, /requireSameOrigin/);
+  assert.match(sessions, /token_hash <> \?/);
+  assert.match(sessions, /DELETE FROM auth_sessions WHERE user_id = \?/);
+  assert.match(sessions, /sessions_revoked/);
+  assert.match(sessions, /clearSessionCookie/);
   assert.match(schema, /authSessions/);
 });
 

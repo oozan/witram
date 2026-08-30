@@ -96,6 +96,7 @@ type Person = { id: string; email: string; displayName: string; createdAt?: stri
 type ContactInvitation = { id: string; person: Person; createdAt: string };
 type SocialState = { contacts: Person[]; incoming: ContactInvitation[]; outgoing: ContactInvitation[]; blocked: Person[] };
 type DeviceSecurityState = { localDeviceId: string | null; devices: Array<{ id: string; name: string; updatedAt: string; current: boolean }>; backupUpdatedAt: string | null; canApproveLinks: boolean };
+type ActiveSession = { id: string; fingerprint: string; current: boolean; createdAt: string; lastSeenAt: string; expiresAt: string };
 type ColorPalette = "gold" | "emerald" | "sapphire" | "crimson" | "amethyst";
 
 const colorPalettes: Array<{ id: ColorPalette; name: string; note: string }> = [
@@ -366,6 +367,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [rotatingKeys, setRotatingKeys] = useState(false);
   const [deviceSecurity, setDeviceSecurity] = useState<DeviceSecurityState | null>(null);
   const [deviceAction, setDeviceAction] = useState(false);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [sessionAction, setSessionAction] = useState(false);
   const [linkCodeInput, setLinkCodeInput] = useState("");
   const [linkRequest, setLinkRequest] = useState<{ code: string; status: string; confirmation: string | null } | null>(null);
   const [linkApproval, setLinkApproval] = useState<{ confirmation: string } | null>(null);
@@ -546,6 +549,18 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     void loadAccountAndContacts();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!showAccount) return;
+    let cancelled = false;
+    void fetch("/api/auth/sessions")
+      .then(async (response) => ({ response, payload: await readApiResponse<{ sessions?: ActiveSession[] }>(response) }))
+      .then(({ response, payload }) => {
+        if (!cancelled && response.ok && payload.sessions) setActiveSessions(payload.sessions);
+      })
+      .catch(() => { /* The account panel remains usable if session telemetry is temporarily unavailable. */ });
+    return () => { cancelled = true; };
+  }, [showAccount]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -899,6 +914,29 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     const state = await listAccountDevices(currentUser);
     setDeviceSecurity(state);
     return state;
+  }
+
+  async function refreshSessions() {
+    const response = await fetch("/api/auth/sessions");
+    const payload = await readApiResponse<{ sessions?: ActiveSession[] }>(response);
+    if (!response.ok || !payload.sessions) throw new Error(payload.error ?? "Sessions could not be loaded");
+    setActiveSessions(payload.sessions);
+  }
+
+  async function revokeSessions(action: "one" | "others" | "all", sessionId?: string) {
+    const warning = action === "all" ? "Sign out every browser, including this one?" : action === "others" ? "Sign out every other browser?" : "Sign out this browser session?";
+    if (!window.confirm(warning)) return;
+    setSessionAction(true);
+    try {
+      const response = await fetch("/api/auth/sessions", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, sessionId }) });
+      const payload = await readApiResponse<{ revoked?: number; signedOut?: boolean }>(response);
+      if (!response.ok) throw new Error(payload.error ?? "Sessions could not be revoked");
+      if (payload.signedOut) { window.location.assign("/"); return; }
+      await refreshSessions();
+      flash(`${payload.revoked ?? 0} session${payload.revoked === 1 ? "" : "s"} signed out`);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Sessions could not be revoked");
+    } finally { setSessionAction(false); }
   }
 
   async function startLinkingThisBrowser() {
@@ -1875,6 +1913,19 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               <label htmlFor="profile-name">Display name</label>
               <div><input id="profile-name" maxLength={60} value={accountName} onChange={(event) => setAccountName(event.target.value)} /><button type="submit" disabled={socialAction || accountName.trim().length < 2}>Save</button></div>
             </form>
+            <section className="session-security-section" aria-labelledby="session-security-title">
+              <div className="social-title"><h3 id="session-security-title">Signed-in browsers</h3><span>{activeSessions.length}</span></div>
+              <p className="session-explanation">Review account sessions separately from encrypted-device keys. Revoking a browser removes its account access immediately.</p>
+              <div className="session-list">
+                {activeSessions.map((session) => <div className="session-row" key={session.id}>
+                  <span className="session-symbol">{session.current ? "●" : "○"}</span>
+                  <span><strong>{session.current ? "This browser" : "Signed-in browser"}</strong><small>Seen {new Date(session.lastSeenAt).toLocaleString()} · ID {session.fingerprint}</small></span>
+                  {!session.current && <button type="button" disabled={sessionAction} onClick={() => void revokeSessions("one", session.id)}>Sign out</button>}
+                </div>)}
+                {!activeSessions.length && <p className="social-loading">Loading active sessions…</p>}
+              </div>
+              {activeSessions.length > 1 && <div className="session-bulk-actions"><button type="button" disabled={sessionAction} onClick={() => void revokeSessions("others")}>Sign out other browsers</button><button className="danger-text" type="button" disabled={sessionAction} onClick={() => void revokeSessions("all")}>Sign out everywhere</button></div>}
+            </section>
             <section className="device-security-section" aria-labelledby="device-security-title">
               <div className="social-title"><h3 id="device-security-title">Devices & recovery</h3><span>{deviceSecurity?.devices.length ?? 0}</span></div>
               {!deviceSecurity ? <p className="social-loading">Loading encrypted devices…</p> : <>

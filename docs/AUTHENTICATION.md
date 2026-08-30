@@ -10,6 +10,7 @@ Whisper owns its account and session boundary; hosting-platform identity headers
 4. After successful verification, the Worker creates the user and an opaque 256-bit session. D1 stores only its SHA-256 hash; the browser receives it in a `Secure`, `HttpOnly`, `SameSite=Lax` cookie.
 5. Login performs a constant-work password check, uses a generic failure message, applies persistent rate limiting, and rotates the session token.
 6. Password recovery accepts a new password before sending a one-time code. The new derivative stays server-side, completion revokes every prior session, and the browser receives a fresh session.
+7. The account panel lists every unexpired browser session by last activity and a non-secret device fingerprint. Users can revoke one browser, all other browsers, or every session.
 
 ## Local configuration
 
@@ -44,4 +45,5 @@ The application uses Authorization Code flow with PKCE S256, a one-time state va
 - Verify a Resend sender domain and test registration delivery, expiry, wrong-code attempts, and replay rejection.
 - Configure Google consent and the exact redirect URI, then test accept, cancel, expired-state, and account-linking paths.
 - Exercise password reset delivery, wrong-code limits, expiration, replay rejection, and automatic revocation of prior sessions.
+- Confirm session revocation takes effect immediately across browsers and that “sign out everywhere” clears the current cookie.
 - Monitor `login_failed`, `login_email`, `login_google`, and `account_registered_email` security events without recording passwords, codes, or tokens.
