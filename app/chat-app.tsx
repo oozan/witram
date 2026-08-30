@@ -18,6 +18,7 @@ import {
 } from "./media-crypto";
 import {
   cacheSentMlsMessage,
+  addMlsGroupMember,
   acceptDeviceLinkCode,
   beginDeviceLink,
   claimDeviceLink,
@@ -35,6 +36,7 @@ import {
   markSafetyNumberVerified,
   rotateMlsEpoch,
   provisionDeviceToConversations,
+  removeMlsGroupMember,
   restoreEncryptedBackup,
   revokeDevice,
   syncMlsEvents,
@@ -89,6 +91,7 @@ type Chat = {
   kind?: "direct" | "group" | "saved";
   persisted?: boolean;
   memberIds?: string[];
+  role?: "owner" | "member";
 };
 
 type CurrentUser = { id: string; email: string; displayName: string };
@@ -337,6 +340,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [groupTitle, setGroupTitle] = useState("");
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
   const [creatingChat, setCreatingChat] = useState(false);
+  const [groupAction, setGroupAction] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [accountName, setAccountName] = useState(currentUser.displayName);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -600,7 +604,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         const response = await fetch("/api/conversations");
         if (!response.ok) throw new Error("Conversation sync failed");
         const payload = await response.json() as {
-          conversations?: Array<{ id: string; title: string; kind: Chat["kind"]; lastActivity: string; messageCount: number; memberIds: string[] }>;
+          conversations?: Array<{ id: string; title: string; kind: Chat["kind"]; lastActivity: string; messageCount: number; memberIds: string[]; role: Chat["role"] }>;
         };
         if (cancelled) return;
         setChats((current) => {
@@ -616,9 +620,10 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
             kind: chat.kind,
             persisted: true,
             memberIds: chat.memberIds,
+            role: chat.role,
           }));
-          const memberIdsByChat = new Map((payload.conversations ?? []).map((chat) => [chat.id, chat.memberIds]));
-          const refreshed = current.map((chat) => memberIdsByChat.has(chat.id) ? { ...chat, memberIds: memberIdsByChat.get(chat.id) } : chat);
+          const serverChats = new Map((payload.conversations ?? []).map((chat) => [chat.id, chat]));
+          const refreshed = current.map((chat) => serverChats.has(chat.id) ? { ...chat, memberIds: serverChats.get(chat.id)?.memberIds, role: serverChats.get(chat.id)?.role } : chat);
           return restored.length ? [...restored, ...refreshed] : refreshed;
         });
         setSyncState("online");
@@ -868,6 +873,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         kind: "direct",
         persisted: true,
         memberIds: [contact.id],
+        role: "owner",
       };
       setChats((current) => [chat, ...current]);
       setMlsDeviceId(mls.deviceId);
@@ -913,6 +919,7 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         kind: "group",
         persisted: true,
         memberIds: [...groupMemberIds],
+        role: "owner",
       };
       setChats((current) => [chat, ...current]);
       setMlsDeviceId(mls.deviceId);
@@ -930,6 +937,36 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     } finally {
       setCreatingChat(false);
     }
+  }
+
+  async function changeGroupMember(memberId: string, action: "add" | "remove") {
+    if (groupAction || activeChat.kind !== "group" || activeChat.role !== "owner") return;
+    const person = social.contacts.find((contact) => contact.id === memberId);
+    if (!person) return;
+    if (action === "remove" && !window.confirm(`Remove ${person.displayName} and rotate the group keys?`)) return;
+    setGroupAction(true);
+    try {
+      const response = await fetch("/api/conversations", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ conversationId: activeChat.id, action, memberId }) });
+      const payload = await readApiResponse<{ memberIds?: string[] }>(response);
+      if (!response.ok || !payload.memberIds) throw new Error(payload.error ?? "Group membership could not be changed");
+      try {
+        const epoch = action === "add"
+          ? await addMlsGroupMember(currentUser, activeChat.id, memberId)
+          : await removeMlsGroupMember(currentUser, activeChat.id, memberId);
+        setMlsStatuses((current) => ({ ...current, [activeChat.id]: { ready: true, epoch, verified: false } }));
+      } catch (cryptoError) {
+        if (action === "add") {
+          await fetch("/api/conversations", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ conversationId: activeChat.id, action: "remove", memberId }) });
+          throw new Error(cryptoError instanceof Error ? `${cryptoError.message}. Server membership was rolled back.` : "MLS addition failed and server membership was rolled back.");
+        }
+        setChats((current) => current.map((chat) => chat.id === activeChat.id ? { ...chat, memberIds: payload.memberIds } : chat));
+        throw new Error(cryptoError instanceof Error ? `${cryptoError.message}. Server access was removed; reload this device to retry the MLS rekey.` : "Server access was removed, but this device still needs an MLS rekey.");
+      }
+      setChats((current) => current.map((chat) => chat.id === activeChat.id ? { ...chat, memberIds: payload.memberIds } : chat));
+      flash(`${person.displayName} ${action === "add" ? "added" : "removed"} · group keys rotated`);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Group membership could not be changed");
+    } finally { setGroupAction(false); }
   }
 
   async function refreshSocial() {
@@ -1917,6 +1954,17 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
               <button onClick={() => void rotateConversationKeys()} disabled={rotatingKeys}>{rotatingKeys ? "Rotating…" : "Rotate keys"}</button>
             </div>}
           </div>
+          {activeChat.kind === "group" && <section className="group-management" aria-labelledby="group-members-title">
+            <div className="social-title"><h3 id="group-members-title">Members</h3><span>{(activeChat.memberIds?.length ?? 0) + 1}</span></div>
+            <div className="group-member-list">
+              <div><span className="person-avatar">{accountName.slice(0, 2).toUpperCase()}</span><span><strong>{accountName}</strong><small>{activeChat.role === "owner" ? "Owner · you" : "You"}</small></span></div>
+              {(activeChat.memberIds ?? []).map((memberId) => {
+                const person = social.contacts.find((contact) => contact.id === memberId);
+                return <div key={memberId}><span className="person-avatar">{person?.displayName.slice(0, 2).toUpperCase() ?? "••"}</span><span><strong>{person?.displayName ?? "Group member"}</strong><small>{person?.email ?? `Encrypted member · ${memberId.slice(-8)}`}</small></span>{activeChat.role === "owner" && person && <button disabled={groupAction} onClick={() => void changeGroupMember(memberId, "remove")}>Remove</button>}</div>;
+              })}
+            </div>
+            {activeChat.role === "owner" && <div className="group-add-list"><strong>Add accepted contact</strong>{social.contacts.filter((contact) => !activeChat.memberIds?.includes(contact.id)).map((contact) => <button key={contact.id} disabled={groupAction} onClick={() => void changeGroupMember(contact.id, "add")}><span>{contact.displayName}</span><b>+</b></button>)}{!social.contacts.some((contact) => !activeChat.memberIds?.includes(contact.id)) && <small>Every accepted contact is already a member.</small>}</div>}
+          </section>}
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
           <button className="archive-chat-action export-chat-action" onClick={exportConversation}>Export conversation</button>
           {activeChat.kind === "direct" && !!activeChat.memberIds?.[0] && <div className="trust-actions">

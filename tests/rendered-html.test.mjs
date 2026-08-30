@@ -460,13 +460,21 @@ test("keeps online GIF provider credentials on the server", async () => {
 });
 
 test("creates multi-contact MLS groups from the conversation picker", async () => {
-  const [client, conversations] = await Promise.all([
+  const [client, conversations, mls] = await Promise.all([
     readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/conversations/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/mls-crypto.ts", import.meta.url), "utf8"),
   ]);
   assert.match(client, /createGroupConversation/);
   assert.match(client, /Create encrypted group/);
   assert.match(client, /createMlsConversation\(currentUser, payload\.conversation\.id, groupMemberIds\)/);
   assert.match(conversations, /kind === "group"/);
   assert.match(conversations, /VALUES \(\?, \?, 'owner'\)/);
+  assert.match(conversations, /Only the group owner can change membership/);
+  assert.match(conversations, /New members must be accepted, unblocked contacts/);
+  assert.match(conversations, /DELETE FROM mls_welcomes/);
+  assert.match(client, /changeGroupMember/);
+  assert.match(mls, /addMlsGroupMember/);
+  assert.match(mls, /removeMlsGroupMember/);
+  assert.match(mls, /proposalType: "remove"/);
 });

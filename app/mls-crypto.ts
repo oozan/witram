@@ -511,11 +511,78 @@ function leafDeviceId(leaf: ReturnType<typeof getGroupMembers>[number]) {
   }
 }
 
+function leafUserId(leaf: ReturnType<typeof getGroupMembers>[number]) {
+  if (leaf.credential.credentialType !== "basic") return null;
+  try {
+    const credential = JSON.parse(decoder.decode(leaf.credential.identity)) as { userId?: string };
+    return credential.userId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function postCommit(conversationId: string, deviceId: string, commitMessage: Uint8Array, epoch: number) {
   const response = await fetch("/api/mls/events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conversationId, senderDeviceId: deviceId, kind: "commit", payload: toBase64(commitMessage), epoch }) });
   const payload = await response.json() as { event?: { id: string }; error?: string };
   if (!response.ok || !payload.event) throw new Error(payload.error ?? "MLS membership commit failed");
   return payload.event.id;
+}
+
+export function addMlsGroupMember(user: CurrentUser, conversationId: string, memberUserId: string) {
+  return serializeConversation(conversationId, async () => {
+    const device = await ensureMlsDevice(user);
+    await syncMlsEventsUnlocked(conversationId, device.deviceId);
+    const record = await vaultGet<SessionRecord>("sessions", conversationId);
+    if (!record) throw new Error("MLS group session is not ready");
+    const directory = await getDirectory(memberUserId);
+    const recipients: Array<{ device: DirectoryDevice; packageVersion: number; keyPackage: KeyPackage }> = [];
+    for (const peerDevice of directory.devices) {
+      const selected = availablePackages(peerDevice)[0];
+      if (selected) recipients.push({ device: peerDevice, packageVersion: selected.version, keyPackage: await verifiedKeyPackage(directory, peerDevice, selected) });
+    }
+    if (!recipients.length) throw new Error("The new member has no available one-time MLS key package");
+    const commit = await createCommit(
+      { state: decodeSession(record), cipherSuite: await suite() },
+      { extraProposals: recipients.map((recipient) => ({ proposalType: "add", add: { keyPackage: recipient.keyPackage } })), wireAsPublicMessage: true, ratchetTreeExtension: true },
+    );
+    commit.consumed.forEach(zeroOutUint8Array);
+    if (!commit.welcome) throw new Error("MLS did not produce a Welcome for the new member");
+    const welcome = toBase64(encodeMlsMessage({ wireformat: "mls_welcome", version: "mls10", welcome: commit.welcome }));
+    const ratchetTree = toBase64(encodeRatchetTree(commit.newState.ratchetTree));
+    for (const recipient of recipients) {
+      const response = await fetch("/api/mls/welcomes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conversationId, recipientUserId: memberUserId, recipientDeviceId: recipient.device.id, recipientKeyPackageVersion: recipient.packageVersion, senderDeviceId: device.deviceId, welcome, ratchetTree }) });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "MLS Welcome delivery failed");
+    }
+    const epoch = Number(commit.newState.groupContext.epoch);
+    const eventId = await postCommit(conversationId, device.deviceId, encodeMlsMessage(commit.commit), epoch);
+    await vaultPut("sessions", { ...record, state: encodeGroupState(commit.newState), lastEventId: eventId, verifiedSafetyNumber: null, updatedAt: new Date().toISOString() });
+    return epoch;
+  });
+}
+
+export function removeMlsGroupMember(user: CurrentUser, conversationId: string, memberUserId: string) {
+  return serializeConversation(conversationId, async () => {
+    const device = await ensureMlsDevice(user);
+    await syncMlsEventsUnlocked(conversationId, device.deviceId);
+    const record = await vaultGet<SessionRecord>("sessions", conversationId);
+    if (!record) throw new Error("MLS group session is not ready");
+    const state = decodeSession(record);
+    const indexes = getGroupMembers(state)
+      .filter((leaf) => leafUserId(leaf) === memberUserId)
+      .map((leaf) => findLeafIndex(state.ratchetTree, leaf))
+      .filter((index): index is number => index !== undefined);
+    if (!indexes.length) throw new Error("The member has no MLS leaves in this group");
+    const commit = await createCommit(
+      { state, cipherSuite: await suite() },
+      { extraProposals: indexes.map((index) => ({ proposalType: "remove", remove: { removed: index } })), wireAsPublicMessage: true, ratchetTreeExtension: true },
+    );
+    commit.consumed.forEach(zeroOutUint8Array);
+    const epoch = Number(commit.newState.groupContext.epoch);
+    const eventId = await postCommit(conversationId, device.deviceId, encodeMlsMessage(commit.commit), epoch);
+    await vaultPut("sessions", { ...record, state: encodeGroupState(commit.newState), lastEventId: eventId, verifiedSafetyNumber: null, updatedAt: new Date().toISOString() });
+    return epoch;
+  });
 }
 
 export async function provisionDeviceToConversations(user: CurrentUser, targetDeviceId: string) {

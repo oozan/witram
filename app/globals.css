@@ -517,6 +517,18 @@ button.person-row:hover { border-color: #aacfc3; background: #f5faf8; }
 .account-legal-links { display: flex; margin-top: 12px; gap: 12px; justify-content: center; }
 .account-legal-links a { color: var(--green-deep); font-size: 9px; font-weight: 750; text-decoration: none; }
 .trust-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 12px 0; }
+.group-management { margin: 12px 0; padding: 13px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper); }
+.group-member-list { display: grid; gap: 5px; }
+.group-member-list > div { display: flex; gap: 8px; align-items: center; padding: 7px; border-radius: 10px; background: rgba(255,255,255,.55); }
+.group-member-list .person-avatar { flex-basis: 30px; height: 30px; border-radius: 9px; font-size: 8px; }
+.group-member-list > div > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.group-member-list strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.group-member-list small, .group-add-list small { color: var(--muted); font-size: 7px; }
+.group-member-list button { padding: 6px 8px; border: 0; border-radius: 7px; background: #f8e8e5; color: #a84d45; font-size: 7px; font-weight: 800; cursor: pointer; }
+.group-add-list { display: grid; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.group-add-list > strong { margin-bottom: 2px; color: var(--muted); font-size: 8px; text-transform: uppercase; }
+.group-add-list button { display: flex; min-height: 30px; align-items: center; justify-content: space-between; padding: 0 9px; border: 0; border-radius: 8px; background: var(--green-soft); color: var(--green-deep); font-size: 8px; font-weight: 800; cursor: pointer; }
+.group-add-list button:disabled, .group-member-list button:disabled { cursor: not-allowed; opacity: .45; }
 .trust-actions button { padding: 10px; border: 1px solid #ead5d2; border-radius: 10px; background: #fff8f7; color: #9b4e47; font-size: 10px; font-weight: 800; cursor: pointer; }
 .report-modal select, .report-modal textarea { width: 100%; margin-bottom: 14px; padding: 11px 13px; border: 1px solid #dce3df; border-radius: 12px; background: #f8faf9; color: var(--ink); }
 .report-modal textarea { min-height: 110px; resize: vertical; }
