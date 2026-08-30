@@ -122,6 +122,18 @@ async function initializeDatabaseOnce() {
       consumed_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_password_resets (
+      challenge_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      password_iterations INTEGER NOT NULL,
+      code_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS devices (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -294,6 +306,7 @@ async function initializeDatabaseOnce() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_expires ON auth_sessions(user_id, expires_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_oauth_accounts_user ON auth_oauth_accounts(user_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_email_challenges_email ON auth_email_challenges(email, expires_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_password_resets_user_expires ON auth_password_resets(user_id, expires_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_object_key ON attachments(object_key)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_attachments_conversation_status ON attachments(conversation_id, status)"),

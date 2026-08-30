@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 
-type AuthMode = "signin" | "register";
+type AuthMode = "signin" | "register" | "recover";
 
 const oauthErrors: Record<string, string> = {
   google_not_configured: "Google sign-in is not configured yet.",
@@ -20,6 +20,7 @@ export function AuthPanel({ authError }: { authError?: string }) {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [challengeKind, setChallengeKind] = useState<"register" | "recover">("register");
   const [code, setCode] = useState("");
   const [error, setError] = useState(authError ? oauthErrors[authError] ?? "Sign-in could not be completed." : "");
   const [message, setMessage] = useState("");
@@ -28,7 +29,7 @@ export function AuthPanel({ authError }: { authError?: string }) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true); setError(""); setMessage("");
-    const endpoint = mode === "signin" ? "/api/auth/email/login" : "/api/auth/email/register";
+    const endpoint = mode === "signin" ? "/api/auth/email/login" : mode === "register" ? "/api/auth/email/register" : "/api/auth/password/request";
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -39,8 +40,10 @@ export function AuthPanel({ authError }: { authError?: string }) {
       if (!response.ok) throw new Error(payload.error ?? "Authentication failed");
       if (payload.challengeId) {
         setChallengeId(payload.challengeId);
+        setChallengeKind(mode === "recover" ? "recover" : "register");
         setMessage(payload.message ?? "Check your email for a verification code.");
-      } else window.location.assign("/");
+      } else if (mode === "signin") window.location.assign("/");
+      else setMessage(payload.message ?? "Check your email for the next step.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Authentication failed");
     } finally { setBusy(false); }
@@ -50,7 +53,7 @@ export function AuthPanel({ authError }: { authError?: string }) {
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/auth/email/verify", {
+      const response = await fetch(challengeKind === "recover" ? "/api/auth/password/confirm" : "/api/auth/email/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ challengeId, code }),
@@ -66,14 +69,14 @@ export function AuthPanel({ authError }: { authError?: string }) {
   return <section className="auth-card">
     <span className="auth-mark">⌁</span>
     <p className="auth-eyebrow">Private by design</p>
-    <h1>{challengeId ? "Verify your email" : "Welcome to Whisper"}</h1>
+    <h1>{challengeId ? challengeKind === "recover" ? "Reset your password" : "Verify your email" : mode === "recover" ? "Recover your account" : "Welcome to Whisper"}</h1>
     <p>{challengeId ? message : "Sign in to create your account, connect with people you trust, and access your encrypted conversations."}</p>
 
     {challengeId ? <form className="auth-form" onSubmit={verify}>
-      <label htmlFor="verification-code">8-digit verification code</label>
+      <label htmlFor="verification-code">8-digit {challengeKind === "recover" ? "reset" : "verification"} code</label>
       <input id="verification-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{8}" maxLength={8} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required />
       {error && <p className="auth-error" role="alert">{error}</p>}
-      <button disabled={busy || code.length !== 8}>{busy ? "Verifying…" : "Verify and continue"}</button>
+      <button disabled={busy || code.length !== 8}>{busy ? "Verifying…" : challengeKind === "recover" ? "Reset password and sign in" : "Verify and continue"}</button>
       <button className="auth-text-button" type="button" onClick={() => { setChallengeId(null); setCode(""); setError(""); }}>Start again</button>
     </form> : <>
       <div className="auth-tabs" role="tablist" aria-label="Email authentication">
@@ -86,9 +89,12 @@ export function AuthPanel({ authError }: { authError?: string }) {
         <input id="auth-email" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} required />
         <label htmlFor="auth-password">Password</label>
         <input id="auth-password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
-        {mode === "register" && <small>Use at least 12 characters. We will verify your email before creating the account.</small>}
+        {mode !== "signin" && <small>Use at least 12 hard-to-guess characters and do not include your email name.</small>}
         {error && <p className="auth-error" role="alert">{error}</p>}
-        <button disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Sign in with email" : "Email me a verification code"}</button>
+        {message && <p className="auth-success" role="status">{message}</p>}
+        <button disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Sign in with email" : mode === "register" ? "Email me a verification code" : "Email me a reset code"}</button>
+        {mode === "signin" && <button className="auth-text-button" type="button" onClick={() => { setMode("recover"); setPassword(""); setError(""); setMessage(""); }}>Forgot password?</button>}
+        {mode === "recover" && <button className="auth-text-button" type="button" onClick={() => { setMode("signin"); setPassword(""); setError(""); setMessage(""); }}>Back to sign in</button>}
       </form>
       <div className="auth-divider"><span>or</span></div>
       <a className="google-auth-button" href="/api/auth/google"><span>G</span> Continue with Google</a>

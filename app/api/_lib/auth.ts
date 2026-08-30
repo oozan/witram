@@ -37,6 +37,21 @@ export function validPassword(value: unknown): value is string {
   return typeof value === "string" && value.length >= 12 && value.length <= 128;
 }
 
+const commonPasswords = new Set([
+  "123456789012", "adminadmin123", "iloveyou12345", "letmein123456", "password1234",
+  "password12345", "password123456", "qwerty123456", "welcome12345", "whisper12345",
+]);
+
+export function passwordValidationError(value: unknown, email?: string | null) {
+  if (!validPassword(value)) return "Use a password of 12–128 characters";
+  const normalized = value.toLowerCase();
+  const localPart = email?.split("@")[0]?.toLowerCase();
+  if (commonPasswords.has(normalized) || /^(.)\1{11,}$/.test(value) || (localPart && localPart.length >= 4 && normalized.includes(localPart))) {
+    return "Choose a less predictable password that does not contain your email name";
+  }
+  return null;
+}
+
 function bytesToBase64Url(bytes: Uint8Array) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -126,6 +141,7 @@ export async function createSession(db: AuthDatabase, userId: string, request: R
     db.prepare("DELETE FROM auth_sessions WHERE expires_at <= ?").bind(now.toISOString()),
     db.prepare("DELETE FROM auth_oauth_states WHERE expires_at <= ?").bind(now.toISOString()),
     db.prepare("DELETE FROM auth_email_challenges WHERE expires_at <= ?").bind(now.toISOString()),
+    db.prepare("DELETE FROM auth_password_resets WHERE expires_at <= ?").bind(now.toISOString()),
     db.prepare(
       "INSERT INTO auth_sessions (token_hash, user_id, expires_at, user_agent_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
     ).bind(tokenHash, userId, expiresAt, await sha256(userAgent), now.toISOString(), now.toISOString()),
@@ -182,6 +198,14 @@ export async function emailCodeMatches(challengeHash: string, code: string, expe
 }
 
 export async function sendVerificationEmail(email: string, code: string) {
+  return sendAuthEmail(email, "Your Whisper verification code", `Your Whisper verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.`);
+}
+
+export async function sendPasswordResetEmail(email: string, code: string) {
+  return sendAuthEmail(email, "Reset your Whisper password", `Your Whisper password reset code is ${code}. It expires in 10 minutes and can be used once. If you did not request this, you can ignore this email.`);
+}
+
+async function sendAuthEmail(email: string, subject: string, text: string) {
   const key = config().RESEND_API_KEY?.trim();
   const from = config().AUTH_EMAIL_FROM?.trim();
   if (!key || !from) throw new Error("Email delivery is not configured");
@@ -191,8 +215,8 @@ export async function sendVerificationEmail(email: string, code: string) {
     body: JSON.stringify({
       from,
       to: [email],
-      subject: "Your Whisper verification code",
-      text: `Your Whisper verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.`,
+      subject,
+      text,
     }),
   });
   if (!response.ok) throw new Error("Verification email could not be sent");

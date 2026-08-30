@@ -1,4 +1,4 @@
-import { createEmailCode, hashPassword, normalizeDisplayName, normalizeEmail, randomNumericCode, randomToken, requireSameOrigin, sendVerificationEmail, sha256, validPassword } from "../../../_lib/auth";
+import { createEmailCode, hashPassword, normalizeDisplayName, normalizeEmail, passwordValidationError, randomNumericCode, randomToken, requireSameOrigin, sendVerificationEmail, sha256 } from "../../../_lib/auth";
 import { database, initializeDatabase, json } from "../../../_lib/social";
 import { enforceRateLimit, safetyError } from "../../../_lib/safety";
 
@@ -8,7 +8,9 @@ export async function POST(request: Request) {
   let payload: { email?: unknown; password?: unknown; displayName?: unknown };
   try { payload = await request.json() as typeof payload; } catch { return json({ error: "A JSON request body is required" }, { status: 400 }); }
   const email = normalizeEmail(payload.email);
-  if (!email || !validPassword(payload.password)) return json({ error: "Use a valid email and a password of 12–128 characters" }, { status: 400 });
+  if (!email) return json({ error: "Use a valid email address" }, { status: 400 });
+  const passwordError = passwordValidationError(payload.password, email);
+  if (passwordError) return json({ error: passwordError }, { status: 400 });
   const displayName = normalizeDisplayName(payload.displayName, email);
   await initializeDatabase();
   const actor = await sha256(email);

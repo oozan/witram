@@ -62,6 +62,19 @@ export const authEmailChallenges = sqliteTable("auth_email_challenges", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("idx_auth_email_challenges_email").on(table.email, table.expiresAt)]);
 
+export const authPasswordResets = sqliteTable("auth_password_resets", {
+  challengeHash: text("challenge_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  passwordHash: text("password_hash").notNull(),
+  passwordSalt: text("password_salt").notNull(),
+  passwordIterations: integer("password_iterations").notNull(),
+  codeHash: text("code_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("idx_auth_password_resets_user_expires").on(table.userId, table.expiresAt)]);
+
 export const conversations = sqliteTable("conversations", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),

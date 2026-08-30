@@ -55,6 +55,26 @@ test("uses hashed revocable sessions and hardened browser cookies", async () => 
   assert.match(schema, /authSessions/);
 });
 
+test("supports one-time password recovery without account enumeration", async () => {
+  const [auth, request, confirm, panel, schema] = await Promise.all([
+    source("../app/api/_lib/auth.ts"),
+    source("../app/api/auth/password/request/route.ts"),
+    source("../app/api/auth/password/confirm/route.ts"),
+    source("../app/auth-panel.tsx"),
+    source("../db/schema.ts"),
+  ]);
+
+  assert.match(auth, /passwordValidationError/);
+  assert.match(auth, /sendPasswordResetEmail/);
+  assert.match(request, /genericResponse/);
+  assert.match(request, /auth-reset/);
+  assert.match(confirm, /attempts >= 5/);
+  assert.match(confirm, /DELETE FROM auth_sessions WHERE user_id/);
+  assert.match(confirm, /password_reset_completed/);
+  assert.match(panel, /Forgot password\?/);
+  assert.match(schema, /authPasswordResets/);
+});
+
 test("implements Google OpenID Connect with PKCE, state, nonce, and signed token validation", async () => {
   const [auth, start, callback] = await Promise.all([
     source("../app/api/_lib/auth.ts"),

@@ -47,6 +47,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .auth-form button { margin-top: 8px; padding: 13px; border: 0; border-radius: 11px; background: var(--green); color: #fff; font-weight: 850; cursor: pointer; }
 .auth-form button:disabled { cursor: wait; opacity: .6; }
 .auth-form .auth-text-button { margin-top: 0; background: transparent; color: var(--green-deep); }
+.auth-success { margin: 0; padding: 10px 12px; border: 1px solid rgba(54, 194, 161, .2); border-radius: 10px; background: rgba(54, 194, 161, .08); color: #4ec8a8; font-size: 11px; line-height: 1.45; }
 .auth-form small { margin: 0 0 4px; }
 .auth-error { margin: 4px 0 !important; padding: 9px 11px; border-radius: 9px; background: #f9e8e5; color: #9a3d34 !important; font-size: 11px !important; text-align: left; }
 .auth-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0; color: #9aa39f; font-size: 10px; }
