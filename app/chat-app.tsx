@@ -100,6 +100,7 @@ type ContactInvitation = { id: string; person: Person; createdAt: string };
 type SocialState = { contacts: Person[]; incoming: ContactInvitation[]; outgoing: ContactInvitation[]; blocked: Person[] };
 type DeviceSecurityState = { localDeviceId: string | null; devices: Array<{ id: string; name: string; updatedAt: string; current: boolean }>; backupUpdatedAt: string | null; canApproveLinks: boolean };
 type ActiveSession = { id: string; fingerprint: string; current: boolean; createdAt: string; lastSeenAt: string; expiresAt: string };
+type PushState = { supported: boolean; configured: boolean; enabled: boolean; permission: NotificationPermission };
 type ColorPalette = "gold" | "emerald" | "sapphire" | "crimson" | "amethyst";
 
 const colorPalettes: Array<{ id: ColorPalette; name: string; note: string }> = [
@@ -376,6 +377,8 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
   const [deviceAction, setDeviceAction] = useState(false);
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [sessionAction, setSessionAction] = useState(false);
+  const [pushState, setPushState] = useState<PushState>({ supported: false, configured: false, enabled: false, permission: "default" });
+  const [pushAction, setPushAction] = useState(false);
   const [linkCodeInput, setLinkCodeInput] = useState("");
   const [linkRequest, setLinkRequest] = useState<{ code: string; status: string; confirmation: string | null } | null>(null);
   const [linkApproval, setLinkApproval] = useState<{ confirmation: string } | null>(null);
@@ -566,6 +569,24 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
         if (!cancelled && response.ok && payload.sessions) setActiveSessions(payload.sessions);
       })
       .catch(() => { /* The account panel remains usable if session telemetry is temporarily unavailable. */ });
+    return () => { cancelled = true; };
+  }, [showAccount]);
+
+  useEffect(() => {
+    if (!showAccount) return;
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    if (!supported) {
+      setPushState({ supported: false, configured: false, enabled: false, permission: "default" });
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([fetch("/api/push"), navigator.serviceWorker.getRegistration("/")])
+      .then(async ([response, registration]) => ({ response, registration, payload: await readApiResponse<{ configured?: boolean }>(response) }))
+      .then(async ({ response, registration, payload }) => {
+        const subscription = await registration?.pushManager.getSubscription();
+        if (!cancelled && response.ok) setPushState({ supported: true, configured: Boolean(payload.configured), enabled: Boolean(subscription), permission: Notification.permission });
+      })
+      .catch(() => { /* Notification controls remain safely disabled when configuration cannot be checked. */ });
     return () => { cancelled = true; };
   }, [showAccount]);
 
@@ -1024,6 +1045,47 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
     } catch (error) {
       flash(error instanceof Error ? error.message : "Sessions could not be revoked");
     } finally { setSessionAction(false); }
+  }
+
+  function pushApplicationKey(value: string) {
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = window.atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  }
+
+  async function setPrivateNotifications(enabled: boolean) {
+    if (pushAction || !pushState.supported) return;
+    setPushAction(true);
+    try {
+      if (enabled) {
+        const stateResponse = await fetch("/api/push");
+        const state = await readApiResponse<{ configured?: boolean; publicKey?: string }>(stateResponse);
+        if (!stateResponse.ok || !state.configured || !state.publicKey) throw new Error(state.error ?? "Private notifications are not configured");
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") throw new Error(permission === "denied" ? "Notifications are blocked in browser settings" : "Notification permission was not granted");
+        const registration = await navigator.serviceWorker.register("/whisper-sw.js", { scope: "/" });
+        const existing = await registration.pushManager.getSubscription();
+        const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushApplicationKey(state.publicKey) });
+        const response = await fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(subscription.toJSON()) });
+        const payload = await readApiResponse<{ enabled?: boolean }>(response);
+        if (!response.ok) throw new Error(payload.error ?? "Private notifications could not be enabled");
+        setPushState({ supported: true, configured: true, enabled: true, permission });
+        flash("Private notifications enabled on this browser");
+      } else {
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const subscription = await registration?.pushManager.getSubscription();
+        if (subscription) {
+          const response = await fetch("/api/push", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: subscription.endpoint }) });
+          const payload = await readApiResponse<Record<string, never>>(response);
+          if (!response.ok) throw new Error(payload.error ?? "Private notifications could not be disabled");
+          await subscription.unsubscribe();
+        }
+        setPushState((current) => ({ ...current, enabled: false, permission: Notification.permission }));
+        flash("Private notifications disabled on this browser");
+      }
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Notification settings could not be changed");
+    } finally { setPushAction(false); }
   }
 
   async function startLinkingThisBrowser() {
@@ -2031,6 +2093,16 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
                 {!activeSessions.length && <p className="social-loading">Loading active sessions…</p>}
               </div>
               {activeSessions.length > 1 && <div className="session-bulk-actions"><button type="button" disabled={sessionAction} onClick={() => void revokeSessions("others")}>Sign out other browsers</button><button className="danger-text" type="button" disabled={sessionAction} onClick={() => void revokeSessions("all")}>Sign out everywhere</button></div>}
+            </section>
+            <section className="notification-security-section" aria-labelledby="notification-security-title">
+              <div className="social-title"><h3 id="notification-security-title">Private notifications</h3><span>{pushState.enabled ? "On" : "Off"}</span></div>
+              <div className="notification-control">
+                <span><strong>Generic alerts on this browser</strong><small>Alerts say only “New encrypted message.” Message text, sender names, chat names, and encryption keys never enter the notification payload.</small></span>
+                <button type="button" aria-pressed={pushState.enabled} disabled={pushAction || !pushState.supported || !pushState.configured || pushState.permission === "denied"} onClick={() => void setPrivateNotifications(!pushState.enabled)}>{pushAction ? "Working…" : pushState.enabled ? "Disable" : "Enable"}</button>
+              </div>
+              {!pushState.supported && <p className="notification-note">This browser does not support Web Push.</p>}
+              {pushState.supported && !pushState.configured && <p className="notification-note">Add VAPID keys to the deployment to make this opt-in available.</p>}
+              {pushState.permission === "denied" && <p className="notification-note warning">Notifications are blocked. Allow them in this site’s browser settings first.</p>}
             </section>
             <section className="device-security-section" aria-labelledby="device-security-title">
               <div className="social-title"><h3 id="device-security-title">Devices & recovery</h3><span>{deviceSecurity?.devices.length ?? 0}</span></div>

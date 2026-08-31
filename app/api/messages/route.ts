@@ -1,5 +1,6 @@
 import { database, type D1Result, identity, initializeDatabase, json, registerIdentity } from "../_lib/social";
 import { enforceWriteSafety, safetyError } from "../_lib/safety";
+import { sendMessagePushNotifications } from "../_lib/web-push";
 
 type StoredMessage = {
   id: string;
@@ -105,6 +106,8 @@ export async function POST(request: Request) {
       "INSERT INTO messages (id, conversation_id, sender_id, ciphertext, iv, algorithm, protocol, epoch, sender_device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(id, conversationId, current.userId, payload.ciphertext, isMls ? "bWxz" : payload.iv, isMls ? "MLS-1.0" : "AES-GCM-256", isMls ? "mls-rfc9420-v1" : "legacy-aes-gcm", isMls ? String(payload.epoch) : null, isMls ? payload.senderDeviceId : null),
   ]);
+
+  await sendMessagePushNotifications(conversationId, current.userId);
 
   return json({ message: { id, createdAt: new Date().toISOString() } }, { status: 201 });
 }

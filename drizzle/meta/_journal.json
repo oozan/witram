@@ -57,6 +57,13 @@
       "when": 1788084612207,
       "tag": "0007_daffy_daimon_hellstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788188116845,
+      "tag": "0008_kind_clint_barton",
+      "breakpoints": true
     }
   ]
 }

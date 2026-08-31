@@ -45,3 +45,25 @@ test("security automation is scheduled, authorization-gated, and fail closed", a
   assert.match(baseline, /process\.exitCode = 1/);
   assert.match(manifest, /"security:review"/);
 });
+
+test("browser push is opt-in, encrypted, generic, and constrained to browser push services", async () => {
+  const [sender, route, worker, client, privacy] = await Promise.all([
+    readFile(new URL("../app/api/_lib/web-push.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/push/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../public/whisper-sw.js", import.meta.url), "utf8"),
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/privacy/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(sender, /"content-encoding": "aes128gcm"/);
+  assert.match(sender, /authorization: `vapid/);
+  assert.match(sender, /New encrypted message/);
+  assert.match(sender, /pushServiceHosts/);
+  assert.doesNotMatch(sender, /display_name|conversation.*title|plaintext.*payload/i);
+  assert.match(route, /requireSameOrigin/);
+  assert.match(route, /existing\.user_id !== current\.userId/);
+  assert.match(worker, /showNotification/);
+  assert.match(worker, /New encrypted message/);
+  assert.match(client, /Notification\.requestPermission\(\)/);
+  assert.match(client, /setPrivateNotifications/);
+  assert.match(privacy, /push provider can observe delivery timing/i);
+});
