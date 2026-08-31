@@ -67,3 +67,22 @@ test("browser push is opt-in, encrypted, generic, and constrained to browser pus
   assert.match(client, /setPrivateNotifications/);
   assert.match(privacy, /push provider can observe delivery timing/i);
 });
+
+test("production smoke and load probes are bounded and require remote authorization", async () => {
+  const [smoke, load, manifest, operations] = await Promise.all([
+    readFile(new URL("../scripts/production-smoke.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/load-smoke.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../docs/OPERATIONS.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(smoke, /SMOKE_TEST_AUTHORIZATION/);
+  assert.match(smoke, /frame-ancestors 'none'/);
+  assert.doesNotMatch(smoke, /method:\s*["'](?:POST|PUT|PATCH|DELETE)/);
+  assert.match(load, /Math\.min\(1_000/);
+  assert.match(load, /Math\.min\(25/);
+  assert.match(load, /LOAD_ALLOW_REMOTE/);
+  assert.match(load, /\/api\/health/);
+  assert.match(manifest, /"smoke:production"/);
+  assert.match(manifest, /"smoke:load"/);
+  assert.match(operations, /bounded health-only load smoke/i);
+});

@@ -56,6 +56,18 @@ Keep backup access separate from routine deployment access, require strong authe
 
 ## Release checklist
 
+Run the passive production gate after deployment:
+
+```sh
+WHISPER_BASE_URL=https://your-host.example SMOKE_TEST_AUTHORIZATION=I_HAVE_AUTHORIZATION npm run smoke:production
+```
+
+Run the bounded health-only load smoke only against a target for which you have explicit authorization. It is hard-capped at 1,000 requests and 25 concurrent requests:
+
+```sh
+WHISPER_BASE_URL=https://staging.example LOAD_ALLOW_REMOTE=true LOAD_TEST_AUTHORIZATION=I_HAVE_AUTHORIZATION npm run smoke:load
+```
+
 - Automated lint, build, boundary tests, dependency audit, and migration inspection pass.
 - The exact tested commit is pushed and packaged.
 - Database migrations are present and forward-compatible; a recovery point exists before applying them.

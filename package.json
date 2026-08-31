@@ -20,6 +20,8 @@
     "security:baseline": "node scripts/security-baseline.mjs",
     "security:dependencies": "npm audit --omit=dev --audit-level=high",
     "security:probe": "node scripts/security-probe.mjs",
+    "smoke:production": "node scripts/production-smoke.mjs",
+    "smoke:load": "node scripts/load-smoke.mjs",
     "security:review": "npm run security:baseline && npm run security:dependencies && npm run lint && npm test"
   },
   "dependencies": {
