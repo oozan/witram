@@ -44,6 +44,14 @@ Keep backup access separate from routine deployment access, require strong authe
 5. With designated test accounts, verify sign-in, contacts, an MLS message, an encrypted attachment, device recovery, blocking/reporting, rate limiting, and retention deletion.
 6. Measure achieved RPO and RTO, record gaps, destroy the isolated restore, and confirm all temporary credentials and copies were removed.
 
+Verify the isolated SQLite/D1 restore without changing it. If media was restored, generate a manifest containing each ciphertext object key, byte size, and SHA-256 digest using the documented example schema, then include it in the check:
+
+```sh
+npm run recovery:verify -- --database=/absolute/path/to/restored.sqlite --media-manifest=/absolute/path/to/media-manifest.json
+```
+
+The verifier opens the database read-only, runs SQLite integrity and foreign-key checks, verifies every required production table, reports bounded record counts, and confirms every active attachment and encrypted thumbnail exists in the hashed media manifest. It never prints object keys, account data, ciphertext, or message content.
+
 ## Disaster recovery
 
 1. Declare the incident, stop risky writes if data consistency is uncertain, and preserve operational logs.

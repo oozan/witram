@@ -1,0 +1,11 @@
+{
+  "schema": "whisper-media-backup/v1",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "objects": [
+    {
+      "key": "attachments/example/ciphertext",
+      "size": 1024,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

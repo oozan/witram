@@ -86,3 +86,21 @@ test("production smoke and load probes are bounded and require remote authorizat
   assert.match(manifest, /"smoke:load"/);
   assert.match(operations, /bounded health-only load smoke/i);
 });
+
+test("recovery verification is read-only and covers database and encrypted media integrity", async () => {
+  const [verifier, manifest, operations, packageManifest] = await Promise.all([
+    readFile(new URL("../scripts/verify-recovery.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../docs/MEDIA_BACKUP_MANIFEST.example.json", import.meta.url), "utf8"),
+    readFile(new URL("../docs/OPERATIONS.md", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(verifier, /readOnly: true/);
+  assert.match(verifier, /PRAGMA integrity_check/);
+  assert.match(verifier, /PRAGMA foreign_key_check/);
+  assert.match(verifier, /push_subscriptions/);
+  assert.match(verifier, /thumbnail_object_key/);
+  assert.doesNotMatch(verifier, /\b(?:INSERT|UPDATE|DELETE|DROP|ALTER)\b/);
+  assert.equal(JSON.parse(manifest).schema, "whisper-media-backup/v1");
+  assert.match(operations, /opens the database read-only/i);
+  assert.match(packageManifest, /"recovery:verify"/);
+});
