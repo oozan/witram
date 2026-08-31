@@ -21,6 +21,26 @@ function cleanMetadata(metadata: SafeMetadata) {
   return Object.fromEntries(Object.entries(metadata).slice(0, 12).map(([key, value]) => [key.slice(0, 40), typeof value === "string" ? value.slice(0, 160) : value]));
 }
 
+async function deliverAlert(payload: Record<string, unknown>) {
+  const webhook = (env as unknown as { ALERT_WEBHOOK_URL?: string }).ALERT_WEBHOOK_URL?.trim();
+  if (!webhook?.startsWith("https://")) return { configured: false, delivered: false };
+  try {
+    const response = await fetch(webhook, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5_000),
+    });
+    return { configured: true, delivered: response.ok };
+  } catch {
+    return { configured: true, delivered: false };
+  }
+}
+
+export async function sendAlertTest() {
+  return deliverAlert({ service: "whisper", category: "alert_delivery_test", severity: "info", test: true, occurredAt: new Date().toISOString() });
+}
+
 export async function recordSecurityEvent(input: {
   actorId?: string | null;
   category: string;
@@ -33,18 +53,7 @@ export async function recordSecurityEvent(input: {
     "INSERT INTO security_events (id, actor_id, category, severity, endpoint, metadata) VALUES (?, ?, ?, ?, ?, ?)",
   ).bind(crypto.randomUUID(), input.actorId ?? null, input.category.slice(0, 50), input.severity, input.endpoint.slice(0, 100), JSON.stringify(metadata)).run();
 
-  const webhook = (env as unknown as { ALERT_WEBHOOK_URL?: string }).ALERT_WEBHOOK_URL?.trim();
-  if (input.severity === "critical" && webhook?.startsWith("https://")) {
-    try {
-      await fetch(webhook, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ service: "whisper", category: input.category, severity: input.severity, endpoint: input.endpoint, metadata, occurredAt: new Date().toISOString() }),
-      });
-    } catch {
-      // The durable event remains available to operations even if alert delivery fails.
-    }
-  }
+  if (input.severity === "critical") await deliverAlert({ service: "whisper", category: input.category, severity: input.severity, endpoint: input.endpoint, metadata, occurredAt: new Date().toISOString() });
 }
 
 export async function enforceRateLimit(input: {

@@ -1,5 +1,6 @@
+import { requireSameOrigin } from "../_lib/auth";
 import { database, identity, initializeDatabase, json } from "../_lib/social";
-import { enforceRateLimit, isOperationsAdmin, recordSecurityEvent, safetyError } from "../_lib/safety";
+import { enforceRateLimit, isOperationsAdmin, recordSecurityEvent, safetyError, sendAlertTest } from "../_lib/safety";
 
 async function authorize(request: Request) {
   const current = await identity(request);
@@ -22,11 +23,21 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  try { requireSameOrigin(request); } catch { return json({ error: "Operations request rejected" }, { status: 403 }); }
   const current = await authorize(request);
   if (!current) return json({ error: "Not found" }, { status: 404 });
   if (Number(request.headers.get("content-length") ?? 0) > 4_000) return json({ error: "Request body is too large" }, { status: 413 });
   let payload: { action?: unknown; userId?: unknown; scope?: unknown; durationHours?: unknown; reason?: unknown };
   try { payload = await request.json() as typeof payload; } catch { return json({ error: "A JSON request body is required" }, { status: 400 }); }
+  if (payload.action === "test-alert") {
+    await initializeDatabase();
+    try { await enforceRateLimit({ actorKey: `ops:${current.userId}`, actorId: current.userId, scope: "alert-test", endpoint: "/api/operations", limit: 3, windowSeconds: 3_600 }); } catch (error) { return safetyError(error); }
+    await recordSecurityEvent({ actorId: current.userId, category: "alert_delivery_test_requested", severity: "info", endpoint: "/api/operations" });
+    const result = await sendAlertTest();
+    if (!result.configured) return json({ error: "Alert webhook is not configured" }, { status: 503 });
+    if (!result.delivered) return json({ error: "Alert webhook did not acknowledge the test" }, { status: 502 });
+    return json({ delivered: true });
+  }
   const action = payload.action === "restrict" || payload.action === "unrestrict" ? payload.action : null;
   const userId = typeof payload.userId === "string" ? payload.userId.trim() : "";
   const scope = ["all", "messages", "media", "contacts"].includes(String(payload.scope)) ? String(payload.scope) : "all";

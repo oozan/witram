@@ -104,3 +104,27 @@ test("recovery verification is read-only and covers database and encrypted media
   assert.match(operations, /opens the database read-only/i);
   assert.match(packageManifest, /"recovery:verify"/);
 });
+
+test("alert delivery tests and incident exercises are controlled and evidence based", async () => {
+  const [operations, safety, exercise, incident, example, manifest] = await Promise.all([
+    readFile(new URL("../app/api/operations/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/_lib/safety.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/incident-exercise.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../docs/INCIDENT_RESPONSE.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/INCIDENT_EXERCISE.example.json", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(operations, /requireSameOrigin/);
+  assert.match(operations, /payload\.action === "test-alert"/);
+  assert.match(operations, /limit: 3/);
+  assert.match(safety, /alert_delivery_test/);
+  assert.match(safety, /AbortSignal\.timeout\(5_000\)/);
+  assert.match(exercise, /status: "planned"/);
+  assert.match(exercise, /A generated plan is not a completed exercise/);
+  assert.match(exercise, /incident_commander/);
+  assert.match(exercise, /approval:/);
+  assert.match(exercise, /\^0\+\$/);
+  assert.match(incident, /status above changes only after/i);
+  assert.equal(JSON.parse(example).schema, "whisper-incident-exercise/v1");
+  assert.match(manifest, /"incident:exercise"/);
+});

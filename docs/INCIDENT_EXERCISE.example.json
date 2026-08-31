@@ -1,0 +1,20 @@
+{
+  "schema": "whisper-incident-exercise/v1",
+  "scenario": "xss",
+  "commit": "0000000",
+  "heldAt": "2026-01-01T09:00:00.000Z",
+  "detectedAt": "2026-01-01T09:05:00.000Z",
+  "declaredAt": "2026-01-01T09:10:00.000Z",
+  "containedAt": "2026-01-01T09:25:00.000Z",
+  "recoveredAt": "2026-01-01T10:00:00.000Z",
+  "participants": [
+    { "role": "incident_commander", "name": "Replace with exercise participant" },
+    { "role": "security_lead", "name": "Replace with exercise participant" },
+    { "role": "privacy_lead", "name": "Replace with exercise participant" }
+  ],
+  "approvedBy": ["incident_commander", "security_lead", "privacy_lead"],
+  "decisions": ["Replace with a concise decision and rationale"],
+  "gaps": [
+    { "description": "Replace with an observed gap", "owner": "Named owner", "dueAt": "2026-02-01T00:00:00.000Z" }
+  ]
+}

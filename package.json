@@ -23,6 +23,7 @@
     "smoke:production": "node scripts/production-smoke.mjs",
     "smoke:load": "node scripts/load-smoke.mjs",
     "recovery:verify": "node scripts/verify-recovery.mjs",
+    "incident:exercise": "node scripts/incident-exercise.mjs",
     "security:review": "npm run security:baseline && npm run security:dependencies && npm run lint && npm test"
   },
   "dependencies": {

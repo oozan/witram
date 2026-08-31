@@ -4,6 +4,8 @@
 **Review date:** August 26, 2026  
 **Exercise status:** Tabletop pending
 
+Generate a scenario-specific exercise plan with `npm run incident:exercise -- --scenario=xss` (also supports `account_takeover`, `data_loss`, `crypto_vulnerability`, and `provider_outage`). After the real cross-functional exercise, copy `docs/INCIDENT_EXERCISE.example.json` outside the repository, replace every placeholder, and validate the evidence with `--evidence=/absolute/path/to/evidence.json`. Plan generation or schema validation does not itself make the tabletop complete; the status above changes only after the named participants perform and approve the exercise.
+
 This plan covers confidentiality, integrity, availability, abuse, supply-chain, and cryptographic incidents affecting Whisper. It complements `docs/OPERATIONS.md`; it does not replace the operator's legal, regulatory, insurance, hosting, or employment procedures.
 
 ## Preparation and authority
