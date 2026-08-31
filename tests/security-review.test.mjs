@@ -128,3 +128,24 @@ test("alert delivery tests and incident exercises are controlled and evidence ba
   assert.equal(JSON.parse(example).schema, "whisper-incident-exercise/v1");
   assert.match(manifest, /"incident:exercise"/);
 });
+
+test("the production release gate fails closed on missing external evidence", async () => {
+  const [gate, example, acceptance, operations, manifest] = await Promise.all([
+    readFile(new URL("../scripts/release-readiness.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../docs/RELEASE_EVIDENCE.example.json", import.meta.url), "utf8"),
+    readFile(new URL("../docs/ACCEPTANCE_TEST.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/OPERATIONS.md", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(gate, /evidence commit does not match HEAD/);
+  assert.match(gate, /independent cryptography audit/);
+  assert.match(gate, /independent penetration test/);
+  assert.match(gate, /multi-browser acceptance/);
+  assert.match(gate, /deployment legal approval/);
+  assert.match(gate, /if \(enforce && !productionReady\) process\.exitCode = 1/);
+  assert.equal(JSON.parse(example).schema, "whisper-release-evidence/v1");
+  assert.match(acceptance, /Chromium, Firefox, and Safari/);
+  assert.match(acceptance, /two synthetic accounts/i);
+  assert.match(operations, /intentionally fails/i);
+  assert.match(manifest, /"release:gate"/);
+});

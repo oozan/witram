@@ -65,6 +65,8 @@ The verifier opens the database read-only, runs SQLite integrity and foreign-key
 
 ## Release checklist
 
+Copy `docs/RELEASE_EVIDENCE.example.json` outside the repository, replace its placeholders with approved evidence for the exact tested commit, then run `npm run release:gate -- --evidence=/absolute/path/to/release-evidence.json`. The gate intentionally fails when independent review, browser acceptance, recovery, incident, monitoring, backup, or deployment-specific legal approval is missing. `npm run readiness:report` provides a non-blocking report during development.
+
 Run the passive production gate after deployment:
 
 ```sh

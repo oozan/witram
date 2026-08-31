@@ -1,0 +1,12 @@
+{
+  "schema": "whisper-release-evidence/v1",
+  "commit": "replace-with-the-exact-40-character-tested-commit",
+  "deployedOrigin": "https://replace-with-production-origin.example",
+  "independentCryptographyAudit": { "status": "pending", "reviewer": "Replace with independent reviewer", "completedAt": null, "reportReference": null },
+  "independentPenetrationTest": { "status": "pending", "reviewer": "Replace with independent tester", "completedAt": null, "reportReference": null, "criticalOpen": null, "highOpen": null },
+  "browserAcceptance": { "status": "pending", "completedAt": null, "syntheticAccounts": 0, "mobileViewport": false, "desktopViewport": false, "browsers": [] },
+  "recoveryDrill": { "status": "pending", "completedAt": null, "achievedRpoMinutes": null, "achievedRtoMinutes": null },
+  "incidentExercise": { "status": "pending", "completedAt": null, "scenario": null, "evidenceReference": null },
+  "monitoring": { "status": "pending", "healthProbeAt": null, "alertDeliveryAt": null, "backupFreshnessAt": null, "scheduledMaintenanceAt": null },
+  "legalApproval": { "status": "pending", "operatorIdentity": "Replace with legal operator", "privacyContact": "Replace with monitored contact", "governingJurisdiction": "Replace with reviewed jurisdiction", "completedAt": null }
+}

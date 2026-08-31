@@ -127,6 +127,8 @@ Direct-chat bodies are encrypted by `ts-mls` 1.6 using the RFC 9420 ciphersuite 
 
 This repository and its TypeScript MLS dependency have **not received a formal security audit**. It integrates standardized primitives; that is not the same as an audited product. Multi-device linking, removal, recovery, encrypted media, group creation and owner administration, scheduled retention sweeps, a nonce-based browser policy, and opt-in generic Web Push alerts are implemented. Recovered devices intentionally do not clone active MLS session secrets: cached history returns, while a surviving member must add the replacement device back to each active chat. Generate notification keys with `npm run push:keys`, configure the three `VAPID_*` values, and let each user opt in from the account panel. Independent browser/XSS testing and an independent cryptographic assessment are still required before treating Whisper as a production replacement for Telegram or Signal. See `SECURITY.md` for the threat model and review checklist.
 
+`npm run readiness:report` shows the repository-controlled release state. The enforcing `release:gate` additionally requires approved evidence for independent cryptography and penetration reviews, the browser matrix, recovery and incident exercises, live monitoring/backups, and deployment-specific legal review. Missing evidence fails closed; this repository never self-certifies those external obligations.
+
 ## Project shape
 
 - `app/chat-app.tsx` — product interface and chat interactions
