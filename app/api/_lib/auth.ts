@@ -1,6 +1,5 @@
-import { env } from "cloudflare:workers";
-
 import type { AuthenticatedIdentity } from "./social";
+import type { WhisperDatabase } from "./platform";
 
 const SESSION_COOKIE = "__Host-whisper_session";
 const OAUTH_COOKIE = "__Host-whisper_oauth";
@@ -17,10 +16,10 @@ type AuthEnv = {
   GOOGLE_CLIENT_SECRET?: string;
 };
 
-export type AuthDatabase = D1Database;
+export type AuthDatabase = WhisperDatabase;
 
 function config() {
-  return env as unknown as AuthEnv;
+  return process.env as AuthEnv;
 }
 
 export function normalizeEmail(value: unknown) {
@@ -242,7 +241,7 @@ export async function verifyGoogleIdToken(idToken: string, expected: { clientId:
   if (header.alg !== "RS256" || typeof header.kid !== "string") throw new Error("Google identity token algorithm is invalid");
   const certificates = await fetch("https://www.googleapis.com/oauth2/v3/certs", { headers: { accept: "application/json" } });
   if (!certificates.ok) throw new Error("Google signing keys are unavailable");
-  const jwks = await certificates.json() as { keys?: JsonWebKey[] };
+  const jwks = await certificates.json() as { keys?: Array<JsonWebKey & { kid?: string }> };
   const jwk = jwks.keys?.find((key) => key.kid === header.kid && key.kty === "RSA");
   if (!jwk) throw new Error("Google signing key is unknown");
   const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);

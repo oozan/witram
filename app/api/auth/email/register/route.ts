@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const challengeId = randomToken();
   const challengeHash = await sha256(challengeId);
   const code = randomNumericCode();
-  const password = await hashPassword(payload.password);
+  const password = await hashPassword(payload.password as string);
   const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
   let codeHash: string;
   try { codeHash = await createEmailCode(challengeHash, code); } catch (error) { return json({ error: error instanceof Error ? error.message : "Email authentication is unavailable" }, { status: 503 }); }

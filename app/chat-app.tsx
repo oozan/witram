@@ -855,10 +855,11 @@ export function ChatApp({ currentUser }: { currentUser: CurrentUser }) {
       if (!response.ok) throw new Error("Message storage failed");
       const payload = await readApiResponse<{ message?: { id: string } }>(response);
       if (!payload.message) throw new Error(payload.error ?? "Message storage failed");
-      if (usesMls) await cacheSentMlsMessage(String(message.id), payload.message.id, secureChat.id);
+      const storedMessageId = payload.message.id;
+      if (usesMls) await cacheSentMlsMessage(String(message.id), storedMessageId, secureChat.id);
       setChats((current) => current.map((item) =>
         item.id === secureChat.id || item.id === chat.id
-          ? { ...item, messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, id: payload.message.id, status: "read" } : entry) }
+          ? { ...item, messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, id: storedMessageId, status: "read" } : entry) }
           : item,
       ));
     } catch {

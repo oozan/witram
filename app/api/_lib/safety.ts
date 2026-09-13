@@ -1,8 +1,7 @@
-import { env } from "cloudflare:workers";
 import { database, json } from "./social";
 
 type Severity = "info" | "warning" | "critical";
-type RestrictionScope = "all" | "messages" | "media" | "contacts";
+type RestrictionScope = "all" | "messages" | "media" | "contacts" | "account";
 type SafeMetadata = Record<string, string | number | boolean | null>;
 
 export class RateLimitError extends Error {
@@ -22,7 +21,7 @@ function cleanMetadata(metadata: SafeMetadata) {
 }
 
 async function deliverAlert(payload: Record<string, unknown>) {
-  const webhook = (env as unknown as { ALERT_WEBHOOK_URL?: string }).ALERT_WEBHOOK_URL?.trim();
+  const webhook = process.env.ALERT_WEBHOOK_URL?.trim();
   if (!webhook?.startsWith("https://")) return { configured: false, delivered: false };
   try {
     const response = await fetch(webhook, {
@@ -137,6 +136,6 @@ export async function anonymousActorKey(request: Request) {
 }
 
 export function isOperationsAdmin(userId: string) {
-  const allowed = (env as unknown as { OPS_ADMIN_USER_IDS?: string }).OPS_ADMIN_USER_IDS?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
+  const allowed = process.env.OPS_ADMIN_USER_IDS?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
   return allowed.includes(userId);
 }

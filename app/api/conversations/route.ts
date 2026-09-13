@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   const title = typeof payload.title === "string" ? payload.title.trim().replace(/\s+/g, " ") : "";
   const kind = payload.kind === "group" || payload.kind === "saved" ? payload.kind : "direct";
   const memberIds = Array.isArray(payload.memberIds)
-    ? Array.from(new Set(payload.memberIds.filter((value): value is string => typeof value === "string" && value.trim()).map((value) => value.trim()))).slice(0, 99)
+    ? Array.from(new Set(payload.memberIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))).slice(0, 99)
     : [];
   if (title.length < 1 || title.length > 80) {
     return json({ error: "Conversation title must be between 1 and 80 characters" }, { status: 400 });

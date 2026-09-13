@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { database, type D1Result } from "./social";
 
 type PushEnv = { VAPID_PUBLIC_KEY?: string; VAPID_PRIVATE_KEY?: string; VAPID_SUBJECT?: string };
@@ -28,8 +27,8 @@ function join(...parts: Uint8Array[]) {
 }
 
 async function hmac(keyBytes: Uint8Array, value: Uint8Array) {
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return new Uint8Array(await crypto.subtle.sign("HMAC", key, value));
+  const key = await crypto.subtle.importKey("raw", keyBytes as BufferSource, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, value as BufferSource));
 }
 
 async function hkdfExtract(salt: Uint8Array, input: Uint8Array) {
@@ -41,7 +40,7 @@ async function hkdfExpand(key: Uint8Array, info: Uint8Array, length: number) {
 }
 
 function configuration() {
-  const values = env as unknown as PushEnv;
+  const values = process.env as PushEnv;
   const publicKey = values.VAPID_PUBLIC_KEY?.trim();
   const privateKey = values.VAPID_PRIVATE_KEY?.trim();
   const subject = values.VAPID_SUBJECT?.trim();
@@ -114,7 +113,7 @@ async function encryptPayload(subscription: Subscription, plaintext: Uint8Array)
 
 async function sendPush(subscription: PushSubscriptionRow, config: NonNullable<ReturnType<typeof configuration>>) {
   const payload = encoder.encode(JSON.stringify({ title: "Whisper", body: "New encrypted message", tag: "whisper-message", url: "/" }));
-  const body = await encryptPayload(subscription, payload);
+  const body = await encryptPayload({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, payload);
   const jwt = await vapidJwt(subscription.endpoint, config);
   return fetch(subscription.endpoint, {
     method: "POST",

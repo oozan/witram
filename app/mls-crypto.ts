@@ -571,7 +571,7 @@ export function removeMlsGroupMember(user: CurrentUser, conversationId: string, 
     const indexes = getGroupMembers(state)
       .filter((leaf) => leafUserId(leaf) === memberUserId)
       .map((leaf) => findLeafIndex(state.ratchetTree, leaf))
-      .filter((index): index is number => index !== undefined);
+      .filter((index) => index !== undefined);
     if (!indexes.length) throw new Error("The member has no MLS leaves in this group");
     const commit = await createCommit(
       { state, cipherSuite: await suite() },

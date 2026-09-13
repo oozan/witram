@@ -1,5 +1,5 @@
-import { env } from "cloudflare:workers";
 import { sessionIdentity } from "./auth";
+import { encryptedMediaStore, whisperDatabase, type WhisperDatabase } from "./platform";
 
 export type AuthenticatedIdentity = {
   userId: string;
@@ -10,14 +10,14 @@ export type AuthenticatedIdentity = {
 export type D1Result<T> = { results?: T[] };
 
 export function database() {
-  if (!env.DB) throw new Error("D1 binding DB is unavailable");
-  return env.DB;
+  return whisperDatabase;
 }
 
 export function mediaBucket() {
-  const bucket = (env as unknown as { MEDIA?: R2Bucket }).MEDIA;
-  if (!bucket) throw new Error("R2 binding MEDIA is unavailable");
-  return bucket;
+  if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.VERCEL_OIDC_TOKEN) {
+    throw new Error("Vercel Blob is not configured");
+  }
+  return encryptedMediaStore;
 }
 
 export async function identity(request: Request): Promise<AuthenticatedIdentity | null> {
@@ -37,7 +37,7 @@ let initialization: Promise<void> | null = null;
 
 type LegacyColumn = readonly [name: string, statement: string];
 
-async function ensureColumns(db: D1Database, table: string, additions: readonly LegacyColumn[]) {
+async function ensureColumns(db: WhisperDatabase, table: string, additions: readonly LegacyColumn[]) {
   const columns = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
   const names = new Set((columns.results ?? []).map((column) => column.name));
   for (const [name, statement] of additions) {
@@ -46,7 +46,7 @@ async function ensureColumns(db: D1Database, table: string, additions: readonly 
       await db.prepare(statement).run();
       names.add(name);
     } catch (error) {
-      // Concurrent Workers can initialize the same legacy database together.
+      // Concurrent serverless instances can initialize the same legacy database together.
       // Treat another request adding the expected column as success.
       const current = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
       if (!(current.results ?? []).some((column) => column.name === name)) throw error;

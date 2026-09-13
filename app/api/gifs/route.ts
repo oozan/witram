@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { initializeDatabase } from "../_lib/social";
 import { anonymousActorKey, enforceRateLimit, safetyError } from "../_lib/safety";
 
@@ -28,7 +27,7 @@ export async function GET(request: Request) {
     await enforceRateLimit({ actorKey, scope: "gif-search-minute", endpoint: "/api/gifs", limit: 30, windowSeconds: 60 });
     await enforceRateLimit({ actorKey, scope: "gif-search-day", endpoint: "/api/gifs", limit: 400, windowSeconds: 86_400 });
   } catch (error) { return safetyError(error); }
-  const tenorKey = (env as unknown as { TENOR_API_KEY?: string }).TENOR_API_KEY;
+  const tenorKey = process.env.TENOR_API_KEY;
   if (!tenorKey) {
     // The bundled encrypted emotes remain available without an online
     // provider, so an absent optional key is a valid capability state.
