@@ -7,7 +7,7 @@ import { ChatApp } from "./chat-app";
 
 type Account = { id: string; email: string; displayName: string };
 
-export function AuthGate({ hasSessionHint, authError }: { hasSessionHint: boolean; authError?: string }) {
+export function AuthGate({ hasSessionHint, authError, googleEnabled }: { hasSessionHint: boolean; authError?: string; googleEnabled: boolean }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [checking, setChecking] = useState(hasSessionHint);
 
@@ -26,6 +26,6 @@ export function AuthGate({ hasSessionHint, authError }: { hasSessionHint: boolea
   }, [hasSessionHint]);
 
   if (checking) return <main className="auth-screen"><section className="auth-card auth-checking" aria-live="polite"><span className="auth-mark">⌁</span><p>Checking your secure session…</p></section></main>;
-  if (!account) return <main className="auth-screen"><AuthPanel authError={authError} /></main>;
+  if (!account) return <main className="auth-screen"><AuthPanel authError={authError} googleEnabled={googleEnabled} /></main>;
   return <ChatApp currentUser={account} />;
 }

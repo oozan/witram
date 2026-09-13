@@ -14,7 +14,7 @@ const oauthErrors: Record<string, string> = {
   google_identity_invalid: "Google identity verification failed.",
 };
 
-export function AuthPanel({ authError }: { authError?: string }) {
+export function AuthPanel({ authError, googleEnabled }: { authError?: string; googleEnabled: boolean }) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -96,10 +96,10 @@ export function AuthPanel({ authError }: { authError?: string }) {
         {mode === "signin" && <button className="auth-text-button" type="button" onClick={() => { setMode("recover"); setPassword(""); setError(""); setMessage(""); }}>Forgot password?</button>}
         {mode === "recover" && <button className="auth-text-button" type="button" onClick={() => { setMode("signin"); setPassword(""); setError(""); setMessage(""); }}>Back to sign in</button>}
       </form>
-      <div className="auth-divider"><span>or</span></div>
-      <a className="google-auth-button" href="/api/auth/google"><span>G</span> Continue with Google</a>
+      {googleEnabled && <><div className="auth-divider"><span>or</span></div>
+      <a className="google-auth-button" href="/api/auth/google"><span>G</span> Continue with Google</a></>}
     </>}
-    <small>Whisper stores a protected password hash, never your password. Google authenticates you without sharing your Google password.</small>
+    <small>Whisper stores a protected password hash, never your password.{googleEnabled ? " Google authenticates you without sharing your Google password." : ""}</small>
     <nav className="auth-legal-links" aria-label="Legal"><a href="/security">Security</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
   </section>;
 }
