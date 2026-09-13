@@ -13,12 +13,12 @@ if (!isLocal && process.env.SECURITY_ALLOW_REMOTE !== "true") {
 }
 if (!/^https?:$/.test(target.protocol)) throw new Error("Only HTTP(S) targets are supported");
 
-const auth = process.env.OAI_SITES_BYPASS_TOKEN;
+const auth = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 const results = [];
 async function probe(name, path, verify) {
   const url = new URL(path, target);
   const headers = { accept: "text/html,application/json" };
-  if (auth) headers["OAI-Sites-Authorization"] = `Bearer ${auth}`;
+  if (auth) headers["x-vercel-protection-bypass"] = auth;
   const started = performance.now();
   try {
     const response = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(10_000) });

@@ -23,8 +23,8 @@ async function sourceFiles(directory = new URL("../app/", import.meta.url)) {
   return nested.flat();
 }
 
-const [manifestRaw, lockRaw, hosting, worker, mls, media, client, safety, operations] = await Promise.all([
-  text("package.json"), text("package-lock.json"), text(".openai/hosting.json"), text("worker/index.ts"),
+const [manifestRaw, lockRaw, deployment, proxy, platform, mls, media, client, safety, operations] = await Promise.all([
+  text("package.json"), text("package-lock.json"), text("vercel.json"), text("proxy.ts"), text("app/api/_lib/platform.ts"),
   text("app/mls-crypto.ts"), text("app/media-crypto.ts"), text("app/client-crypto.ts"),
   text("app/api/_lib/safety.ts"), text("app/api/operations/route.ts"),
 ]);
@@ -36,8 +36,9 @@ const loose = Object.entries(dependencies).filter(([, version]) => !/^\d+\.\d+\.
 check("exact dependency versions", loose.length === 0, loose.length ? JSON.stringify(loose) : `${Object.keys(dependencies).length} direct dependencies pinned`);
 check("npm lockfile v3", lock.lockfileVersion === 3, `lockfileVersion=${lock.lockfileVersion}`);
 check("MLS implementation pinned", manifest.dependencies?.["ts-mls"] === "1.6.2", `ts-mls=${manifest.dependencies?.["ts-mls"]}`);
-check("required storage bindings", /"d1"\s*:\s*"DB"/.test(hosting) && /"r2"\s*:\s*"MEDIA"/.test(hosting), "D1 DB and R2 MEDIA bindings");
-check("browser security headers", ["x-content-type-options", "strict-transport-security", "permissions-policy", "cross-origin-opener-policy"].every((value) => worker.includes(value)), "Worker response header baseline");
+check("required storage providers", platform.includes("TURSO_DATABASE_URL") && platform.includes("@vercel/blob"), "Turso database and private Vercel Blob");
+check("scheduled maintenance", deployment.includes("/api/cron/maintenance"), "authenticated Vercel cron route");
+check("browser security headers", ["x-content-type-options", "strict-transport-security", "permissions-policy", "cross-origin-opener-policy"].every((value) => proxy.includes(value)), "Next.js proxy response header baseline");
 check("MLS ciphersuite", mls.includes("MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519"), "RFC 9420 suite identifier");
 check("link domain separation", mls.includes("whisper-device-link-v1") && mls.includes("additionalData"), "HKDF info plus AEAD AAD");
 check("backup domain separation", mls.includes("whisper-encrypted-backup-v1") && mls.includes("additionalData"), "HKDF info plus account AAD");

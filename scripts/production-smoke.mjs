@@ -6,9 +6,9 @@ const local = ["localhost", "127.0.0.1", "::1"].includes(target.hostname);
 if (!/^https?:$/.test(target.protocol)) throw new Error("WHISPER_BASE_URL must use HTTP(S)");
 if (!local && process.env.SMOKE_TEST_AUTHORIZATION !== AUTHORIZATION) throw new Error(`Refusing a remote target without SMOKE_TEST_AUTHORIZATION=${AUTHORIZATION}`);
 
-const bypass = process.env.OAI_SITES_BYPASS_TOKEN;
+const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 const headers = { accept: "text/html,application/json" };
-if (bypass) headers["OAI-Sites-Authorization"] = `Bearer ${bypass}`;
+if (bypass) headers["x-vercel-protection-bypass"] = bypass;
 const results = [];
 
 async function check(name, path, validate) {

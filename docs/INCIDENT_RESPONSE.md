@@ -31,7 +31,7 @@ These are operational goals, not guarantees. When uncertain, start one level hig
 
 - Record reporter/source, UTC time, observed behavior, affected version/region/accounts, and the least-sensitive supporting evidence.
 - Create an incident ID, severity, commander, private timeline, and next-update time.
-- Preserve the relevant deployed commit, lockfile, build/deployment records, bounded security events, provider audit logs, D1/R2 metadata, and access logs according to policy.
+- Preserve the relevant deployed commit, lockfile, build/deployment records, bounded security events, provider audit logs, Turso/Blob metadata, and access logs according to policy.
 - Treat unverified claims as hypotheses. Do not state that encrypted content was exposed merely because ciphertext or metadata was accessed.
 
 ### 2. Contain
@@ -50,7 +50,7 @@ These are operational goals, not guarantees. When uncertain, start one level hig
 
 ### 4. Recover
 
-- Restore D1/R2 from a verified recovery point only when integrity requires it; first validate in isolation using `docs/OPERATIONS.md`.
+- Restore Turso/Blob from a verified recovery point only when integrity requires it; first validate in isolation using `docs/OPERATIONS.md`.
 - Deploy the exact reviewed commit, validate `/api/health`, run the authorized passive probe, and monitor authentication, message/media success, errors, security events, storage, and reports.
 - Re-enable paused functions in stages. Record actual recovery point, data loss, downtime, and any user action needed (safety-number re-verification, device removal, or re-provisioning).
 
@@ -69,7 +69,7 @@ These are operational goals, not guarantees. When uncertain, start one level hig
 3. Determine first/last malicious execution and affected sessions; advise affected users to remove suspect devices and verify safety numbers after a clean release.
 4. Audit every same-origin script, HTML/URL sink, build input, and service-worker/cache path before recovery.
 
-### Database, R2, log, or backup access
+### Database, Blob, log, or backup access
 
 1. Identify exact tables/objects/fields and access window. Ciphertext access is still a confidentiality incident even when decryption keys were absent.
 2. Verify whether any attachment keys, MLS state, recovery/link material, identity private keys, or plaintext entered storage/logging contrary to design.

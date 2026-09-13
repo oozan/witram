@@ -4,14 +4,14 @@ Whisper is a responsive Telegram-inspired chat application with client-side encr
 
 ## 0.10 milestone
 
-The 0.10 release adds app-owned email accounts and optional Google OpenID Connect. Registration requires an emailed one-time code; passwords are stored only as salted PBKDF2-HMAC-SHA-256 hashes; opaque sessions are stored hashed in D1 and delivered through secure HttpOnly cookies. Platform identity headers are not trusted for application authentication.
+The 0.10 release adds app-owned email accounts and optional Google OpenID Connect. Registration requires an emailed one-time code; passwords are stored only as salted PBKDF2-HMAC-SHA-256 hashes; opaque sessions are stored hashed in Turso and delivered through secure HttpOnly cookies. Platform identity headers are not trusted for application authentication.
 
 ## What works
 
 - Email registration with one-time-code address verification
 - Email/password sign-in with generic failures and persistent rate limiting
 - Optional Google OpenID Connect with Authorization Code, PKCE, state, and nonce validation
-- Hashed, revocable D1 sessions in secure HttpOnly cookies
+- Hashed, revocable Turso sessions in secure HttpOnly cookies
 - Durable user profiles with editable display names
 - Contact invitations between registered Whisper accounts
 - Accept and decline workflows with symmetric contact records
@@ -62,7 +62,7 @@ The 0.10 release adds app-owned email accounts and optional Google OpenID Connec
 - Non-exportable Web Crypto identity private keys in IndexedDB
 - AES-256-GCM encryption for Saved Messages in the browser before network transmission
 - Non-exportable conversation keys stored in IndexedDB on the device
-- Cloudflare D1 persistence containing ciphertext and IVs, never message plaintext
+- Turso persistence containing ciphertext and IVs, never message plaintext
 - Server-side conversation membership checks
 - Payload size limits, no-store API responses, and baseline browser security headers
 - Per-response script nonces and a strict-dynamic Content Security Policy for the key-bearing web client
@@ -71,8 +71,8 @@ The 0.10 release adds app-owned email accounts and optional Google OpenID Connec
 - Client-side encrypted image, local GIF, video, audio, voice-message, and file uploads
 - Separately encrypted WebP thumbnails for image, GIF, and video previews
 - MIME allowlists, file-signature checks, and per-media size limits before encryption
-- R2 ciphertext storage with D1 ownership, membership, upload-state, and expiry metadata
-- Hourly scheduled deletion of expired or abandoned ciphertext and stale security artifacts
+- Private Vercel Blob ciphertext storage with Turso ownership, membership, upload-state, and expiry metadata
+- Daily scheduled deletion of expired or abandoned ciphertext and stale security artifacts
 - On-demand client decryption for previews, playback, and downloads
 - Per-upload retention controls plus immediate encrypted-object deletion when the sender deletes a message
 - Durable request and bandwidth limits for messages, media, invitations, reports, device/MLS operations, backups, profiles, and external GIF search
@@ -107,7 +107,7 @@ Email delivery uses Resend and Google sign-in uses Google OpenID Connect. Copy `
 
 ### Online GIF search
 
-Whisper keeps its built-in animated GIF collection available without any external service. To also search Tenor online, copy `.env.example` to `.env.local` and add a Tenor API key as `TENOR_API_KEY`. Configure the same secret in the deployed Sites environment to enable online search there.
+Whisper keeps its built-in animated GIF collection available without any external service. To also search Tenor online, copy `.env.example` to `.env.local` and add a Tenor API key as `TENOR_API_KEY`. Configure the same secret in Vercel to enable online search there.
 
 Online GIF search is a separate convenience feature: the provider receives the search request and the sent result remains a provider URL. For end-to-end encrypted storage, download a GIF and attach it through the encrypted file picker instead.
 
@@ -119,7 +119,7 @@ npm test
 npm run security:review
 ```
 
-The test command creates the production build and verifies the rendered product and encryption boundary. The security review also checks pinned dependencies, cryptographic/storage invariants, unsafe browser sinks, known production dependency advisories, and lint.
+The test command creates the production build and verifies product, storage, and encryption boundaries. The security review also checks pinned dependencies, cryptographic/storage invariants, unsafe browser sinks, known production dependency advisories, and lint.
 
 ## Security model
 
@@ -141,7 +141,9 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `app/api/backups/route.ts` — ciphertext-only recovery backup storage
 - `app/api/conversations/route.ts` — durable user-owned conversation API
 - `app/api/messages/route.ts` — membership-protected ciphertext-only message API
-- `app/api/attachments/` — authorized R2 ciphertext upload, retrieval, finalization, retention, and deletion
+- `app/api/attachments/` — authorized private Blob ciphertext upload, retrieval, finalization, retention, and deletion
+- `app/api/_lib/platform.ts` — Turso-compatible database and private Vercel Blob adapters
+- `app/api/cron/maintenance/route.ts` — authenticated Vercel retention and metadata cleanup
 - `app/api/_lib/safety.ts` — persistent rate limits, restrictions, events, and alert delivery
 - `app/api/_lib/auth.ts` — password hashing, verification codes, sessions, cookies, and Google token validation
 - `app/api/auth/` — email registration, verification, sign-in, sign-out, and Google OIDC routes
@@ -152,8 +154,9 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `app/api/blocks/route.ts` — contact blocking and unblocking
 - `app/api/reports/route.ts` — moderation report intake
 - `db/schema.ts` — relational data model
-- `drizzle/` — generated D1 migration
-- `.openai/hosting.json` — deployment bindings
+- `drizzle/` — generated SQLite-compatible migration history
+- `vercel.json` — Vercel framework and cron configuration
+- `docs/VERCEL_DEPLOYMENT.md` — deployment and environment setup
 - `docs/OPERATIONS.md` — monitoring, abuse response, backup, disaster recovery, and release runbook
 - `docs/THREAT_MODEL.md` — assets, trust boundaries, adversaries, threat register, and residual risks
 - `docs/CRYPTOGRAPHY_REVIEW.md` — primitive inventory, key lifecycle, audit invariants, and review map

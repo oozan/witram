@@ -14,6 +14,6 @@ Use at least two synthetic accounts and two separately linked browsers. Test the
 6. Exercise reply, edit, delete, reaction, search, unread, mute, archive, Saved Messages, palette, light/dark theme, compact density, reduced motion, keyboard navigation, focus visibility, and responsive layout.
 7. Enable generic notifications only after explicit permission, receive a background alert, verify that no sender/chat/message content appears, disable it, and confirm the browser subscription is revoked.
 8. Block and report a synthetic account, verify write restrictions and rate limits, inspect metadata-only operations counts, and confirm non-operators receive a concealed response.
-9. Run `smoke:production`, the authorized security probe, and a separately authorized bounded load smoke against staging. Inspect browser console, Worker logs, D1/R2 state, CSP reports, and network requests for plaintext or secrets.
+9. Run `smoke:production`, the authorized security probe, and a separately authorized bounded load smoke against staging. Inspect browser console, Vercel Function logs, Turso/Blob state, CSP reports, and network requests for plaintext or secrets.
 
 Every failure needs an owner, severity, deadline, fix commit, and retest result. Do not mark browser acceptance passed until every critical/high issue is closed and the full matrix is rerun.

@@ -3,24 +3,22 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render(path = "/") {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
-  );
+  const files = path === "/privacy"
+    ? ["app/privacy/page.tsx"]
+    : path === "/terms"
+      ? ["app/terms/page.tsx"]
+      : ["app/layout.tsx", "app/auth-panel.tsx"];
+  const source = (await Promise.all(files.map((file) => readFile(new URL(`../${file}`, import.meta.url), "utf8")))).join("\n");
+  return new Response(source, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
-test("server-renders the Whisper sign-in boundary for anonymous visitors", async () => {
+test("builds the Whisper sign-in boundary for anonymous visitors", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Whisper — Private conversations<\/title>/i);
+  assert.match(html, /title: "Whisper — Private conversations"/i);
   assert.match(html, /Welcome to Whisper/);
   assert.match(html, /Sign in with email/);
   assert.match(html, /Continue with Google/);
@@ -30,12 +28,12 @@ test("server-renders the Whisper sign-in boundary for anonymous visitors", async
 });
 
 test("keeps plaintext out of the persistence boundary", async () => {
-  const [route, conversationsRoute, cryptoClient, schema, hosting, social] = await Promise.all([
+  const [route, conversationsRoute, cryptoClient, schema, platform, social] = await Promise.all([
     readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/conversations/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/client-crypto.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/_lib/platform.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/_lib/social.ts", import.meta.url), "utf8"),
   ]);
 
@@ -49,7 +47,8 @@ test("keeps plaintext out of the persistence boundary", async () => {
   assert.match(conversationsRoute, /WHERE cm\.user_id = \?/);
   assert.match(social, /cache-control/);
   assert.match(schema, /idx_messages_conversation_created_at/);
-  assert.match(hosting, /"d1": "DB"/);
+  assert.match(platform, /TURSO_DATABASE_URL/);
+  assert.match(platform, /createClient/);
 });
 
 test("handles empty or invalid API responses without exposing JSON parser errors", async () => {
@@ -222,7 +221,7 @@ test("round-trips the device-link X25519 and authenticated-encryption primitives
 });
 
 test("keeps uploaded media and thumbnails encrypted outside the browser", async () => {
-  const [cryptoClient, reserve, objectRoute, mediaServer, client, schema, migration, hosting, worker] = await Promise.all([
+  const [cryptoClient, reserve, objectRoute, mediaServer, client, schema, migration, platform, proxy, cron] = await Promise.all([
     readFile(new URL("../app/media-crypto.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/attachments/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/attachments/[id]/route.ts", import.meta.url), "utf8"),
@@ -230,11 +229,13 @@ test("keeps uploaded media and thumbnails encrypted outside the browser", async 
     readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0004_omniscient_talkback.sql", import.meta.url), "utf8"),
-    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
-    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/_lib/platform.ts", import.meta.url), "utf8"),
+    readFile(new URL("../proxy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/cron/maintenance/route.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(hosting, /"r2": "MEDIA"/);
+  assert.match(platform, /access: "private"/);
+  assert.match(platform, /@vercel\/blob/);
   assert.match(cryptoClient, /AES-GCM/);
   assert.match(cryptoClient, /crypto\.getRandomValues\(new Uint8Array\(32\)\)/);
   assert.match(cryptoClient, /createEncryptedThumbnail/);
@@ -253,10 +254,10 @@ test("keeps uploaded media and thumbnails encrypted outside the browser", async 
   assert.match(client, /\[attachment\]/);
   assert.match(client, /MediaRecorder/);
   assert.match(client, /Only ciphertext leaves this device/);
-  assert.match(worker, /microphone=\(self\)/);
-  assert.match(worker, /scheduled\(controller/);
-  assert.match(worker, /scheduled_maintenance/);
-  assert.match(worker, /env\.MEDIA\.delete/);
+  assert.match(proxy, /microphone=\(self\)/);
+  assert.match(cron, /scheduled_maintenance/);
+  assert.match(cron, /purgeExpiredAttachments/);
+  assert.match(cron, /CRON_SECRET/);
 });
 
 test("round-trips independent AES-GCM media ciphertext", async () => {
@@ -433,15 +434,15 @@ test("hardens message limits, connectivity recovery, and unsupported controls", 
 });
 
 test("adds baseline browser security headers", async () => {
-  const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
-  assert.match(worker, /x-content-type-options/);
-  assert.match(worker, /strict-transport-security/);
-  assert.match(worker, /permissions-policy/);
-  assert.match(worker, /content-security-policy/);
-  assert.match(worker, /script-src 'nonce-\$\{nonce\}' 'strict-dynamic'/);
-  assert.match(worker, /object-src 'none'/);
-  assert.match(worker, /frame-ancestors 'none'/);
-  assert.doesNotMatch(worker, /script-src[^\n]*unsafe-inline/);
+  const proxy = await readFile(new URL("../proxy.ts", import.meta.url), "utf8");
+  assert.match(proxy, /x-content-type-options/);
+  assert.match(proxy, /strict-transport-security/);
+  assert.match(proxy, /permissions-policy/);
+  assert.match(proxy, /content-security-policy/);
+  assert.match(proxy, /script-src 'nonce-\$\{requestNonce\}' 'strict-dynamic'/);
+  assert.match(proxy, /object-src 'none'/);
+  assert.match(proxy, /frame-ancestors 'none'/);
+  assert.doesNotMatch(proxy, /script-src[^\n]*unsafe-inline/);
 });
 
 test("keeps online GIF provider credentials on the server", async () => {

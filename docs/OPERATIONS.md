@@ -14,7 +14,7 @@ Assign a named service owner, privacy contact, security contact, and backup oper
 - An authenticated operations administrator can send a metadata-only delivery test with `POST /api/operations` and `{ "action": "test-alert" }`. The action is same-origin protected, limited to three attempts per hour, durably records who requested it, and fails unless the webhook acknowledges the request.
 - Alert on health failures, sustained rate-limit increases, report backlog growth, unexpected restriction changes, failed deployments, and storage/database capacity thresholds.
 - Never send message ciphertext, keys, filenames, email addresses, report details, or recovery material to alerting systems.
-- The Worker runs scheduled maintenance at minute 17 of every hour. It deletes expired or abandoned R2 ciphertext, expires authentication and device-link artifacts, prunes limiter buckets, and applies the documented metadata-retention windows. Monitor `scheduled_maintenance` events and Worker cron failures.
+- Vercel Cron runs authenticated maintenance daily at 03:17 UTC. It deletes expired or abandoned private Blob ciphertext, expires authentication and device-link artifacts, prunes limiter buckets, and applies the documented metadata-retention windows. Monitor `scheduled_maintenance` events and cron failures.
 
 ## Abuse response
 
@@ -31,8 +31,8 @@ Application-level encrypted account recovery backups protect user identity mater
 
 The operator must configure and verify provider-managed protection for both logical bindings:
 
-- `DB`: scheduled snapshots or point-in-time recovery that cover schema and data.
-- `MEDIA`: object versioning, replication, or backup consistent with selected user retention. Backup expiry must not extend a user-selected deletion period.
+- Turso: scheduled snapshots or point-in-time recovery that cover schema and data.
+- Vercel Blob: a separately verified ciphertext backup process consistent with selected user retention. Backup expiry must not extend a user-selected deletion period.
 
 Keep backup access separate from routine deployment access, require strong authentication, encrypt exports, log restores, and document retention. Do not export media decryption keys because the service does not possess them.
 
@@ -45,7 +45,7 @@ Keep backup access separate from routine deployment access, require strong authe
 5. With designated test accounts, verify sign-in, contacts, an MLS message, an encrypted attachment, device recovery, blocking/reporting, rate limiting, and retention deletion.
 6. Measure achieved RPO and RTO, record gaps, destroy the isolated restore, and confirm all temporary credentials and copies were removed.
 
-Verify the isolated SQLite/D1 restore without changing it. If media was restored, generate a manifest containing each ciphertext object key, byte size, and SHA-256 digest using the documented example schema, then include it in the check:
+Verify the isolated SQLite/Turso restore without changing it. If media was restored, generate a manifest containing each ciphertext object key, byte size, and SHA-256 digest using the documented example schema, then include it in the check:
 
 ```sh
 npm run recovery:verify -- --database=/absolute/path/to/restored.sqlite --media-manifest=/absolute/path/to/media-manifest.json
@@ -83,5 +83,5 @@ WHISPER_BASE_URL=https://staging.example LOAD_ALLOW_REMOTE=true LOAD_TEST_AUTHOR
 - The exact tested commit is pushed and packaged.
 - Database migrations are present and forward-compatible; a recovery point exists before applying them.
 - Health monitoring, alert delivery, operations access, retention cleanup, and backup freshness are verified.
-- The hourly Cron Trigger is enabled in the deployed Worker and a recent `scheduled_maintenance` event is visible.
+- The Vercel Cron is enabled, `CRON_SECRET` is configured, and a recent `scheduled_maintenance` event is visible.
 - Privacy Policy, Terms, security limitations, subprocessors, operator identity, governing terms, and contact routes are reviewed for the actual deployment and jurisdiction.

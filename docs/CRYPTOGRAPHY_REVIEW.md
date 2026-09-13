@@ -9,13 +9,13 @@ This document gives an external cryptographer a precise starting point. It does 
 
 | Purpose | Construction | Key/nonce source | Binding and storage |
 | --- | --- | --- | --- |
-| Direct-chat group protocol | RFC 9420 MLS via `ts-mls` 1.6.2, `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519` | MLS implementation and Web Crypto RNG | Group state remains in IndexedDB; Worker transports opaque private messages, commits, and Welcomes |
+| Direct-chat group protocol | RFC 9420 MLS via `ts-mls` 1.6.2, `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519` | MLS implementation and Web Crypto RNG | Group state remains in IndexedDB; Vercel Functions transport opaque private messages, commits, and Welcomes |
 | Account identity | Ed25519 | Web Crypto generated; imported non-exportable after wrapping | Stable public key anchors safety number and signs device identities |
 | Device identity | Ed25519 | Fresh per device | Account signature binds user ID, device ID, name, and public key; device signs MLS key packages |
-| Saved Messages | AES-256-GCM | Non-exportable Web Crypto key; fresh 96-bit IV per encryption | IndexedDB key, D1 ciphertext/IV |
+| Saved Messages | AES-256-GCM | Non-exportable Web Crypto key; fresh 96-bit IV per encryption | IndexedDB key, Turso ciphertext/IV |
 | Device linking | X25519 + HKDF-SHA-256 + AES-256-GCM | Fresh ephemeral key pairs, 192-bit capability, fresh 96-bit IV | HKDF info `whisper-device-link-v1`; link ID is AES-GCM AAD; user compares derived authentication code |
 | Recovery backup | HKDF-SHA-256 + AES-256-GCM | Random 256-bit recovery secret, random 256-bit salt, fresh 96-bit IV | HKDF info `whisper-encrypted-backup-v1`; user ID is AAD; secret never uploaded |
-| Media and thumbnail encryption | AES-256-GCM | Fresh 256-bit key per upload; separate random 96-bit IV for original and thumbnail | R2 receives ciphertext only; key/IV/name/MIME live inside an MLS-encrypted descriptor |
+| Media and thumbnail encryption | AES-256-GCM | Fresh 256-bit key per upload; separate random 96-bit IV for original and thumbnail | Private Vercel Blob receives ciphertext only; key/IV/name/MIME live inside an MLS-encrypted descriptor |
 | Safety number | SHA-256 over sorted stable account public keys | Public identities | Domain prefix `whisper-safety-v1`; compared outside Whisper |
 | Device revocation | Ed25519 signature | Account identity key | Domain prefix `whisper-device-revoke-v1`, user, target device, timestamp |
 
@@ -46,7 +46,7 @@ An independent reviewer should prove or falsify each invariant against code and 
 - Link keys bind both ephemeral public keys, the capability, link identifier, role, and protocol version strongly enough to prevent unknown-key-share, reflection, and transcript substitution.
 - Authentication-code comparison covers the same transcript used by the transfer key and cannot be bypassed by UI or API state races.
 - Recovery decrypts only backups bound to the expected user/version and rejects truncation, rollback, malformed lengths, and key confusion.
-- Private byte buffers are erased when possible and no secret is serialized into logs, D1 metadata, R2 metadata, URLs, analytics, or webhook events.
+- Private byte buffers are erased when possible and no secret is serialized into logs, Turso metadata, Blob metadata, URLs, analytics, or webhook events.
 - Device removal ordering cannot present “removed” before the MLS epoch that excludes the device is durably synchronized.
 
 ## Code review map
@@ -71,7 +71,7 @@ An independent reviewer should prove or falsify each invariant against code and 
 5. Recovery has no transparency-backed anti-rollback counter and relies on user custody of a high-entropy key.
 6. Safety verification state is local and does not synchronize across verified devices.
 7. Metadata and traffic-analysis protections are intentionally out of scope for the cryptographic payload protocol.
-8. The Worker applies a per-response nonce and strict-dynamic Content Security Policy to framework scripts, blocks object/frame/base injection, and constrains forms and outbound resource classes. Inline styles remain allowed for the current component system, so independent browser/XSS testing is still required.
+8. The Next.js proxy applies a per-response nonce and strict-dynamic Content Security Policy to framework scripts, blocks object/frame/base injection, and constrains forms and outbound resource classes. Inline styles remain allowed for the current component system, so independent browser/XSS testing is still required.
 
 ## Independent audit acceptance criteria
 

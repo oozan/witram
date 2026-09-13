@@ -11,7 +11,7 @@ if (!local && (process.env.LOAD_ALLOW_REMOTE !== "true" || process.env.LOAD_TEST
   throw new Error(`Refusing remote load without LOAD_ALLOW_REMOTE=true and LOAD_TEST_AUTHORIZATION=${AUTHORIZATION}`);
 }
 
-const bypass = process.env.OAI_SITES_BYPASS_TOKEN;
+const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 let issued = 0;
 const samples = [];
 async function worker() {
@@ -20,7 +20,7 @@ async function worker() {
     const started = performance.now();
     try {
       const headers = { accept: "application/json" };
-      if (bypass) headers["OAI-Sites-Authorization"] = `Bearer ${bypass}`;
+      if (bypass) headers["x-vercel-protection-bypass"] = bypass;
       const response = await fetch(new URL("/api/health", target), { headers, cache: "no-store", signal: AbortSignal.timeout(10_000) });
       const body = await response.json();
       samples.push({ ok: response.status === 200 && body.status === "ok", durationMs: performance.now() - started, status: response.status });

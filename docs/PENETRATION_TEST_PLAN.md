@@ -14,7 +14,7 @@ The repository probe is passive, rate-bounded, secret-redacting, and fails close
 SECURITY_TEST_AUTHORIZATION=I_HAVE_AUTHORIZATION npm run security:probe -- --target=http://localhost:3000
 ```
 
-For an authorized private Sites staging deployment, supply its bypass token as `OAI_SITES_BYPASS_TOKEN`; the probe never prints it. Do not place tokens in shell history or commit them.
+For an authorized deployment-protected Vercel staging deployment, supply its automation bypass secret as `VERCEL_AUTOMATION_BYPASS_SECRET`; the probe never prints it. Do not place secrets in shell history or commit them.
 
 ## Test matrix
 
