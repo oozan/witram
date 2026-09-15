@@ -134,6 +134,15 @@ async function initializeDatabaseOnce() {
       consumed_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_password_reset_intents (
+      challenge_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS push_subscriptions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -316,6 +325,7 @@ async function initializeDatabaseOnce() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_oauth_accounts_user ON auth_oauth_accounts(user_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_email_challenges_email ON auth_email_challenges(email, expires_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_password_resets_user_expires ON auth_password_resets(user_id, expires_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_password_reset_intents_user_expires ON auth_password_reset_intents(user_id, expires_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at)"),

@@ -75,6 +75,16 @@ export const authPasswordResets = sqliteTable("auth_password_resets", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("idx_auth_password_resets_user_expires").on(table.userId, table.expiresAt)]);
 
+export const authPasswordResetIntents = sqliteTable("auth_password_reset_intents", {
+  challengeHash: text("challenge_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("idx_auth_password_reset_intents_user_expires").on(table.userId, table.expiresAt)]);
+
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

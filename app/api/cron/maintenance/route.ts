@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     db.prepare("DELETE FROM auth_oauth_states WHERE expires_at <= ?").bind(nowIso),
     db.prepare("DELETE FROM auth_email_challenges WHERE expires_at <= ?").bind(nowIso),
     db.prepare("DELETE FROM auth_password_resets WHERE expires_at <= ?").bind(nowIso),
+    db.prepare("DELETE FROM auth_password_reset_intents WHERE expires_at <= ?").bind(nowIso),
     db.prepare("DELETE FROM device_link_sessions WHERE expires_at <= ?").bind(nowIso),
     db.prepare("DELETE FROM rate_limit_buckets WHERE expires_at < ?").bind(Math.floor(now.getTime() / 1_000)),
     db.prepare("DELETE FROM attachments WHERE status = 'deleted' AND deleted_at <= ?").bind(new Date(now.getTime() - 30 * 86_400_000).toISOString()),

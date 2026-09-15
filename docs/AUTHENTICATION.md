@@ -9,7 +9,7 @@ Whisper owns its account and session boundary; hosting-platform identity headers
 3. Resend delivers an eight-digit code. Turso stores only a secret-keyed code hash and an expiring registration challenge.
 4. After successful verification, the server creates the user and an opaque 256-bit session. Turso stores only its SHA-256 hash; the browser receives it in a `Secure`, `HttpOnly`, `SameSite=Lax` cookie.
 5. Login performs a constant-work password check, uses a generic failure message, applies persistent rate limiting, and rotates the session token.
-6. Password recovery accepts a new password before sending a one-time code. The new derivative stays server-side, completion revokes every prior session, and the browser receives a fresh session.
+6. Password recovery sends a one-time code first. The new password is derived only after the code verifies; completion revokes every prior session and the browser receives a fresh session.
 7. The account panel lists every unexpired browser session by last activity and a non-secret device fingerprint. Users can revoke one browser, all other browsers, or every session.
 
 ## Local configuration

@@ -18,6 +18,8 @@ export function AuthPanel({ authError, googleEnabled }: { authError?: string; go
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [challengeKind, setChallengeKind] = useState<"register" | "recover">("register");
@@ -34,7 +36,7 @@ export function AuthPanel({ authError, googleEnabled }: { authError?: string; go
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, displayName }),
+        body: JSON.stringify(mode === "recover" ? { email } : { email, password, displayName }),
       });
       const payload = await response.json() as { error?: string; challengeId?: string; message?: string };
       if (!response.ok) throw new Error(payload.error ?? "Authentication failed");
@@ -51,12 +53,16 @@ export function AuthPanel({ authError, googleEnabled }: { authError?: string; go
 
   async function verify(event: FormEvent) {
     event.preventDefault();
+    if (challengeKind === "recover" && newPassword !== confirmPassword) {
+      setError("The passwords do not match");
+      return;
+    }
     setBusy(true); setError("");
     try {
       const response = await fetch(challengeKind === "recover" ? "/api/auth/password/confirm" : "/api/auth/email/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ challengeId, code }),
+        body: JSON.stringify(challengeKind === "recover" ? { challengeId, code, password: newPassword } : { challengeId, code }),
       });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Verification failed");
@@ -75,9 +81,16 @@ export function AuthPanel({ authError, googleEnabled }: { authError?: string; go
     {challengeId ? <form className="auth-form" onSubmit={verify}>
       <label htmlFor="verification-code">8-digit {challengeKind === "recover" ? "reset" : "verification"} code</label>
       <input id="verification-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{8}" maxLength={8} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required />
+      {challengeKind === "recover" && <>
+        <label htmlFor="reset-password">New password</label>
+        <input id="reset-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required />
+        <label htmlFor="reset-password-confirm">Confirm new password</label>
+        <input id="reset-password-confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
+        <small>Choose a new password only after entering the code from your email.</small>
+      </>}
       {error && <p className="auth-error" role="alert">{error}</p>}
       <button disabled={busy || code.length !== 8}>{busy ? "Verifying…" : challengeKind === "recover" ? "Reset password and sign in" : "Verify and continue"}</button>
-      <button className="auth-text-button" type="button" onClick={() => { setChallengeId(null); setCode(""); setError(""); }}>Start again</button>
+      <button className="auth-text-button" type="button" onClick={() => { setChallengeId(null); setCode(""); setNewPassword(""); setConfirmPassword(""); setError(""); }}>Start again</button>
     </form> : <>
       <div className="auth-tabs" role="tablist" aria-label="Email authentication">
         <button role="tab" aria-selected={mode === "signin"} onClick={() => { setMode("signin"); setError(""); }}>Sign in</button>
@@ -87,9 +100,12 @@ export function AuthPanel({ authError, googleEnabled }: { authError?: string; go
         {mode === "register" && <><label htmlFor="auth-name">Display name</label><input id="auth-name" autoComplete="name" minLength={2} maxLength={60} value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></>}
         <label htmlFor="auth-email">Email</label>
         <input id="auth-email" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} required />
-        <label htmlFor="auth-password">Password</label>
-        <input id="auth-password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
-        {mode !== "signin" && <small>Use at least 12 hard-to-guess characters and do not include your email name.</small>}
+        {mode !== "recover" && <>
+          <label htmlFor="auth-password">Password</label>
+          <input id="auth-password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
+          {mode !== "signin" && <small>Use at least 12 hard-to-guess characters and do not include your email name.</small>}
+        </>}
+        {mode === "recover" && <small>We’ll email an 8-digit code. You’ll choose a new password after verifying it.</small>}
         {error && <p className="auth-error" role="alert">{error}</p>}
         {message && <p className="auth-success" role="status">{message}</p>}
         <button disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Sign in with email" : mode === "register" ? "Email me a verification code" : "Email me a reset code"}</button>

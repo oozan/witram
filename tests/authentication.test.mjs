@@ -73,10 +73,17 @@ test("supports one-time password recovery without account enumeration", async ()
   assert.match(auth, /sendPasswordResetEmail/);
   assert.match(request, /genericResponse/);
   assert.match(request, /auth-reset/);
+  assert.match(request, /auth_password_reset_intents/);
+  assert.doesNotMatch(request, /hashPassword/);
   assert.match(confirm, /attempts >= 5/);
+  assert.match(confirm, /passwordValidationError/);
+  assert.match(confirm, /hashPassword/);
+  assert.match(confirm, /auth_password_reset_intents/);
   assert.match(confirm, /DELETE FROM auth_sessions WHERE user_id/);
   assert.match(confirm, /password_reset_completed/);
   assert.match(panel, /Forgot password\?/);
+  assert.match(panel, /We’ll email an 8-digit code/);
+  assert.match(panel, /confirmPassword/);
   assert.match(schema, /authPasswordResets/);
 });
 
