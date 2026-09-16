@@ -42,6 +42,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .auth-tabs button[aria-selected="true"] { background: #fff; color: var(--green-deep); box-shadow: 0 2px 8px rgba(20,52,42,.08); }
 .auth-form { display: grid; gap: 8px; text-align: left; }
 .auth-form label { margin-top: 4px; color: var(--ink); font-size: 11px; font-weight: 800; }
+.auth-password-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+.auth-password-label-row label { margin-top: 0; }
+.auth-forgot-link { margin: 0; padding: 0; border: 0; background: transparent; color: var(--green-deep); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.auth-forgot-link:hover { text-decoration: underline; }
 .auth-form input { width: 100%; padding: 12px 13px; border: 1px solid #dfe6e2; border-radius: 11px; outline: none; background: #fff; color: var(--ink); font: inherit; }
 .auth-form input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(13,129,105,.12); }
 .auth-form button { margin-top: 8px; padding: 13px; border: 0; border-radius: 11px; background: var(--green); color: #fff; font-weight: 850; cursor: pointer; }
@@ -678,6 +682,7 @@ button:active { transform: scale(.97); }
 .auth-tabs button { color: #7f7f96; }
 .auth-tabs button[aria-selected="true"] { background: rgba(121,102,255,.15); color: #dcd7ff; box-shadow: 0 0 20px rgba(109,89,255,.08) inset; }
 .auth-form label { color: #b9b7ca; letter-spacing: .35px; }
+.auth-forgot-link { color: #a99eff; }
 .auth-form input {
   border-color: rgba(170,165,210,.14);
   background: rgba(255,255,255,.045);

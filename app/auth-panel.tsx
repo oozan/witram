@@ -101,7 +101,7 @@ export function AuthPanel({ authError, googleEnabled }: { authError?: string; go
         <label htmlFor="auth-email">Email</label>
         <input id="auth-email" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} required />
         {mode !== "recover" && <>
-          <label htmlFor="auth-password">Password</label>
+          <div className="auth-password-label-row"><label htmlFor="auth-password">Password</label>{mode === "signin" && <button className="auth-forgot-link" type="button" onClick={() => { setMode("recover"); setPassword(""); setError(""); setMessage(""); }}>Forgot password?</button>}</div>
           <input id="auth-password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={12} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
           {mode !== "signin" && <small>Use at least 12 hard-to-guess characters and do not include your email name.</small>}
         </>}
@@ -109,7 +109,6 @@ export function AuthPanel({ authError, googleEnabled }: { authError?: string; go
         {error && <p className="auth-error" role="alert">{error}</p>}
         {message && <p className="auth-success" role="status">{message}</p>}
         <button disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Sign in with email" : mode === "register" ? "Email me a verification code" : "Email me a reset code"}</button>
-        {mode === "signin" && <button className="auth-text-button" type="button" onClick={() => { setMode("recover"); setPassword(""); setError(""); setMessage(""); }}>Forgot password?</button>}
         {mode === "recover" && <button className="auth-text-button" type="button" onClick={() => { setMode("signin"); setPassword(""); setError(""); setMessage(""); }}>Back to sign in</button>}
       </form>
       {googleEnabled && <><div className="auth-divider"><span>or</span></div>
