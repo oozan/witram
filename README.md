@@ -167,3 +167,7 @@ This repository and its TypeScript MLS dependency have **not received a formal s
 - `docs/CRYPTOGRAPHY_REVIEW.md` — primitive inventory, key lifecycle, audit invariants, and review map
 - `docs/PENETRATION_TEST_PLAN.md` — authorization, test matrix, evidence, severity, and acceptance rules
 - `docs/INCIDENT_RESPONSE.md` — severity model, containment/recovery process, and security playbooks
+
+## License
+
+Released under the [MIT License](LICENSE).
