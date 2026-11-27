@@ -109,7 +109,13 @@ export function cookieValue(request: Request, name: string) {
   const cookie = request.headers.get("cookie") ?? "";
   for (const item of cookie.split(";")) {
     const [key, ...value] = item.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(value.join("="));
+    } catch {
+      // A malformed percent-encoding is an invalid cookie, not a server error.
+      return null;
+    }
   }
   return null;
 }
