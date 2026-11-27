@@ -1,6 +1,6 @@
 # Whisper
 
-Whisper (developed in the `witram` repository) is an end-to-end encrypted web chat application built with Next.js and TypeScript. Messages are encrypted on the device with the MLS protocol (RFC 9420), media is encrypted before upload, and the server stores only ciphertext and routing metadata.
+Whisper is an end-to-end encrypted web chat application built with Next.js and TypeScript. Messages are encrypted on the device with the MLS protocol (RFC 9420), media is encrypted before upload, and the server stores only ciphertext and routing metadata.
 
 ## 0.10 milestone
 
