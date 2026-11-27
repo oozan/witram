@@ -3,7 +3,7 @@
   "version": "0.10.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "check:node": "node scripts/check-node-version.mjs",
@@ -13,7 +13,9 @@
     "build": "next build --webpack",
     "prestart": "npm run check:node",
     "start": "next start",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "npm run build && npm run test:unit",
+    "pretest:unit": "npm run check:node",
+    "test:unit": "node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "push:keys": "node scripts/generate-vapid-keys.mjs",

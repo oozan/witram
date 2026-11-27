@@ -1,6 +1,6 @@
 # Whisper
 
-Whisper is a responsive Telegram-inspired chat application with client-side encryption and durable ciphertext storage.
+Whisper (developed in the `witram` repository) is an end-to-end encrypted web chat application built with Next.js and TypeScript. Messages are encrypted on the device with the MLS protocol (RFC 9420), media is encrypted before upload, and the server stores only ciphertext and routing metadata.
 
 ## 0.10 milestone
 
@@ -90,7 +90,7 @@ The 0.10 release adds app-owned email accounts and optional Google OpenID Connec
 
 ## Run locally
 
-Requires Node.js 22.13 or newer.
+Requires Node.js 22.18 or newer (the test suite imports TypeScript modules directly using Node's built-in type stripping).
 
 ```bash
 nvm install 22
@@ -119,7 +119,12 @@ npm test
 npm run security:review
 ```
 
-The test command creates the production build and verifies product, storage, and encryption boundaries. The security review also checks pinned dependencies, cryptographic/storage invariants, unsafe browser sinks, known production dependency advisories, and lint.
+`npm test` creates the production build and then runs the whole suite; `npm run test:unit` runs the suite without building. The suite has two layers:
+
+- **Behavioral tests** (`tests/auth-behavior.test.mjs`, `tests/media-crypto-behavior.test.mjs`) import and execute the real TypeScript modules. They cover password hashing and policy, session creation, lookup, and revocation against an in-memory database, cookie parsing, same-origin enforcement, email-code binding, Google ID-token signature and claim validation against a locally generated RSA key, media type and size validation, and the AES-GCM media round trip including tamper detection.
+- **Boundary tests** (the remaining files) assert security invariants across the codebase, such as required headers, policies, and storage rules.
+
+`npm run security:review` also checks pinned dependencies, cryptographic/storage invariants, unsafe browser sinks, known production dependency advisories, and lint.
 
 ## Security model
 
